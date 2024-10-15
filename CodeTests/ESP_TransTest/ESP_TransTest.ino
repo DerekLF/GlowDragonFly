@@ -1,31 +1,34 @@
 #include <esp_now.h>
 #include <WiFi.h>
 
-// Structure to store the data
-typedef struct struct_message {
-  int values[6];
-} struct_message;
-
-struct_message myData;
-
+// Global integer variables
+uint8_t data[6];
 // MAC addresses of the 5 receiver ESPs
 uint8_t broadcastAddress1[] = { 0x24, 0x6F, 0x28, 0xA1, 0xB2, 0xC3 };
 uint8_t broadcastAddress2[] = { 0x24, 0x6F, 0x28, 0xA1, 0xB2, 0xC4 };
+uint8_t broadcastAddress1[] = { 0x24, 0x6F, 0x28, 0xA1, 0xB2, 0xC3 };
+uint8_t broadcastAddress2[] = { 0x24, 0x6F, 0x28, 0xA1, 0xB2, 0xC4 };
+uint8_t broadcastAddress1[] = { 0x24, 0x6F, 0x28, 0xA1, 0xB2, 0xC3 };
+uint8_t broadcastAddress2[] = { 0x24, 0x6F, 0x28, 0xA1, 0xB2, 0xC4 };
+uint8_t bcA[][];
 // Add remaining MAC addresses...
 
 // Function to send data
-void sendData() {
-  myData.values[0] = 10;  // Populate with values
-  myData.values[1] = 20;
-  myData.values[2] = 30;
-  myData.values[3] = 40;
-  myData.values[4] = 50;
-  myData.values[5] = 50;
-
+void sendData(uint8_t* sData[6]) {
+  calculateChecksum(sData);
   // Send data to each receiver
-  esp_now_send(broadcastAddress1, (uint8_t *)&myData, sizeof(myData));
-  esp_now_send(broadcastAddress2, (uint8_t *)&myData, sizeof(myData));
+  esp_now_send(broadcastAddress1, (uint8_t*)sData, sizeof(sData));
+  esp_now_send(broadcastAddress2, (uint8_t*)sData, sizeof(sData));
   // Repeat for other receivers...
+}
+
+void calculateChecksum(unint8_t* parseData[6]) {
+  unint16_t sum = 0;
+  for (int i = 0; i < 4; i++) {
+    sum += parseData[i];
+  }
+  parseData[4] = sum & 0xFF;         // First byte of checksum
+  parseData[5] = (sum >> 8) & 0xFF;  // Second byte of checksum
 }
 
 void setup() {
@@ -41,34 +44,11 @@ void setup() {
     return;
   }
 
-
-
-  ConnectPeer(broadcastAddress1);
-  ConnectPeer(broadcastAddress2);
+  // You may need to add the peers (like in the previous examples) here
 
   // Send the data
-  sendData();
-}
-
-esp_now_peer_info_t peerInfo;
-
-int ConnectPeer(uint8_t *broadcastAddress) {
-  memcpy(peerInfo.peer_addr, broadcastAddress, 6);
-  peerInfo.channel = 0;
-  peerInfo.encrypt = false;
-
-  // Try to add the peer and return success or failure
-  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
-    Serial.println("Failed to add peer");
-    return 0;  // Failure
-  } else {
-    Serial.println("Peer added successfully");
-    return 1;  // Success
-  }
+  sendData(data);
 }
 
 void loop() {
-  // Keep sending data every 5 seconds
-  delay(5000);
-  sendData();
-}
+  // Optionally, continue

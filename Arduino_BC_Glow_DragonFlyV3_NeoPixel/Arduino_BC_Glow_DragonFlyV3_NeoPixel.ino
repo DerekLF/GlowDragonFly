@@ -4,8 +4,14 @@ check all code for comments
 
 */
 #define DEBUG
+#define synchronization
+
+#ifdef synchronization
+
+#endif
 
 #include <Adafruit_NeoPixel.h>
+
 #define LED_TYPE NEO_GRBW  //LED configuration used
 
 #define Static 0
@@ -16,7 +22,7 @@ check all code for comments
 #define Spiral 5
 #define Wing 6
 
-// How many leds in your strip?
+// How many leds in the body parts?
 #define Num_Leds_Wings 34
 #define Num_Leds_Head 6
 #define Num_Leds_Tail 31
@@ -64,8 +70,14 @@ void setup() {
   wingRB.show();
   head.show();
   tail.show();
-  fetchColourCombo(random(27), arDATALoop);
+
   Serial.begin(9600);
+//ESP_NOW setup
+#ifdef synchronization
+
+#endif
+  delay(1000);
+  fetchColourCombo(random(27), arDATALoop);
   //Implement Jaspers crazy ass idea of synchronization
 }
 
@@ -330,7 +342,6 @@ int mode_Heartbeat(int BPM) {
   //output the mode
   switch (i) {
     case 0:  //Low
-      int brightness = random(10, 30);
       lightLED(2, 1, 20, NULL);
       break;
     case 1:  //Peak
