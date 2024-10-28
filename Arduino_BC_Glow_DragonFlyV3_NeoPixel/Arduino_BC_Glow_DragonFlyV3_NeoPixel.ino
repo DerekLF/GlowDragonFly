@@ -260,6 +260,7 @@ int mode_Travel_1(int intervalT1, int arDATA[4]) {  //travel from tail tip to he
   }
   return returnValT1;
 }
+//maybe give it 2 states before finishing, switching between front colour followed by background colour
 int PulseWidthT2 = 10;
 int positionT2W = 0, positionT2T = 0;
 unsigned long previousMillisT2W = 0, previousMillisT2T = 0, previousMillisT2H = 0;
@@ -277,6 +278,8 @@ int mode_Travel_2(int interval, int mode, int arDATA[4]) {  //travel from body t
     previousMillisT2H = currentMillisT2;
     if (mode == 1) {
       head.fill(head.Color(arRGBb[0], arRGBb[1], arRGBb[2], arRGBb[3]));
+    } else {
+      head.fill(head.Color(arRGBf[0], arRGBf[1], arRGBf[2], arRGBf[3]));
     }
   }
   if (currentMillisT2 - previousMillisT2T >= (interval / (Num_Leds_Tail + PulseWidthT2))) {  //Tail
