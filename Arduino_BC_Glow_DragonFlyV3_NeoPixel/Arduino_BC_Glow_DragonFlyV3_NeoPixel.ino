@@ -46,7 +46,7 @@ Adafruit_NeoPixel tail = Adafruit_NeoPixel(Num_Leds_Tail, datTail, LED_TYPE);
 
 
 //usable variables
-int Modes = 3;
+int Modes = 2;
 int returnVar = 0;
 int arDATALoop[4];
 int randColor = 0, randColorBuf = 0;
@@ -63,13 +63,18 @@ void setup() {
   wingRB.begin();
   head.begin();
   tail.begin();
+
   //start with a blank slate
-  wingLF.show();
-  wingRF.show();
-  wingLB.show();
-  wingRB.show();
-  head.show();
-  tail.show();
+  wingLF.clear();
+  wingRF.clear();
+  wingLB.clear();
+  wingRB.clear();
+  head.clear();
+  tail.clear();
+
+  delay(50);
+
+
 
   Serial.begin(9600);
 //ESP_NOW setup
@@ -77,7 +82,7 @@ void setup() {
 
 #endif
   delay(1000);
-  fetchColourCombo(random(27), arDATALoop);
+  fetchColourCombo(random(32), arDATALoop);
   //Implement Jaspers crazy ass idea of synchronization
 }
 
@@ -102,7 +107,7 @@ void loop() {
       break;
     case Travel1:  //Light travels from tail to head across the wings
                    //works perfectly, takes 8.3 seconds per cycle
-      returnVar = mode_Travel_1(50, arDATALoop);
+      returnVar = mode_Travel_1(500, arDATALoop);
       break;
     case Travel2:  //Light travels from the center of the dragonfly to the outside
       returnVar = mode_Travel_2(2000, 0, arDATALoop);
@@ -110,7 +115,7 @@ void loop() {
     case Heartbeat:  //Butterfly mimics a heartbeat
                      //feels off, make it feel more like a heartbeat, you know. with the LEDs slowly lighting up.
                      //also the heartrate doesn't really work that well (60bps is faster then 120bps)
-      returnVar = mode_Heartbeat(60);
+      returnVar = mode_Heartbeat(120);
       break;
     case Spiral:  //Light spiral across it's body
       returnVar = mode_Spiral(0, arDATALoop);
@@ -126,11 +131,13 @@ void loop() {
   head.show();
   tail.show();
 
-  if (returnVar == 1) {
-    //mode_Static(0, 0);
+
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis >= interval && returnVar == 1) {  //5min interval timer to switch up the lighting effects
+    //save the last time you switched modes
+    previousMillis = currentMillis;
     while (randColor == randColorBuf) {
-      randColor = random(27);
-      delay(5);
+      randColor = random(32);
     }
 #ifdef DEBUG
     Serial.println("Fetching a new colorcombo");
@@ -138,11 +145,20 @@ void loop() {
     fetchColourCombo(randColor, arDATALoop);
     randColorBuf = randColor;
     returnVar = 0;
-  }
-  unsigned long currentMillis = millis();
-  if (currentMillis - previousMillis >= interval) {  //5min interval timer to switch up the lighting effects
-    //save the last time you switched modes
-    previousMillis = currentMillis;
+    wingLF.clear();
+    wingRF.clear();
+    wingLB.clear();
+    wingRB.clear();
+    head.clear();
+    tail.clear();
+
+    wingLF.show();
+    wingRF.show();
+    wingLB.show();
+    wingRB.show();
+    head.show();
+    tail.show();
+
 
     /*if (returnVar == 1) {
       if (Modes == Wing) {
@@ -170,25 +186,48 @@ int mode_Static(int colour, int brightness) {
 }
 
 /**************************************************************************/
-//Function for showing a random dual colour spectacle on the wings, staticly
+//Function for showing a random dual + blend colour spectacle on the wings, staticly
 //Input NULL
 /**************************************************************************/
 int mode_Static_P(int arDATA[4]) {  //clean this up and merge with lightLED
   int arRGB[3];
+  int subColRGB[3];
 
-  lightLED(arDATA[0], 2, arDATA[2], arRGB);
-  for (int i = 0; i < (Num_Leds_Wings / 2); i++) {  //colouring the first half of the wings
+  lightLED(arDATA[0], 2, arDATA[2], arRGB);  //fetching the background color
+                                             //filling the color in
+  wingLF.fill(wingLF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+  wingRF.fill(wingLF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+  wingLB.fill(wingLF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+  wingRB.fill(wingLF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+  head.fill(wingLF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+  tail.fill(wingLF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+
+  blendColorsRGBW(arDATA, subColRGB);                                    //fetching the blend of the 2 colors
+  for (int i = (Num_Leds_Wings / 3); i < Num_Leds_Wings * 2 / 3; i++) {  //colouring the second part of the wings
+    wingLF.setPixelColor(i, wingLF.Color(subColRGB[0], subColRGB[1], subColRGB[2], subColRGB[3]));
+    wingRF.setPixelColor(i, wingRF.Color(subColRGB[0], subColRGB[1], subColRGB[2], subColRGB[3]));
+    wingLB.setPixelColor(i, wingLB.Color(subColRGB[0], subColRGB[1], subColRGB[2], subColRGB[3]));
+    wingRB.setPixelColor(i, wingRB.Color(subColRGB[0], subColRGB[1], subColRGB[2], subColRGB[3]));
+  }
+  for (int i = (Num_Leds_Head / 3); i < Num_Leds_Head * 2 / 3; i++) {  //colouring the second part of the head
+    head.setPixelColor(i, head.Color(subColRGB[0], subColRGB[1], subColRGB[2], subColRGB[3]));
+  }
+  for (int i = (Num_Leds_Tail / 3); i < Num_Leds_Tail * 2 / 3; i++) {  //colouring the second part of the tail
+    tail.setPixelColor(i, tail.Color(subColRGB[0], subColRGB[1], subColRGB[2], subColRGB[3]));
+  }
+
+  lightLED(arDATA[1], 2, arDATA[3], arRGB);                          //fetching the background accent color
+  for (int i = (Num_Leds_Wings * 2 / 3); i < Num_Leds_Wings; i++) {  //colouring the second part of the wings
     wingLF.setPixelColor(i, wingLF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
     wingRF.setPixelColor(i, wingRF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
     wingLB.setPixelColor(i, wingLB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
     wingRB.setPixelColor(i, wingRB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
   }
-  lightLED(arDATA[1], 2, arDATA[3], arRGB);
-  for (int i = (Num_Leds_Wings / 2); i < Num_Leds_Wings; i++) {  //colouring the second part of the wings
-    wingLF.setPixelColor(i, wingLF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
-    wingRF.setPixelColor(i, wingRF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
-    wingLB.setPixelColor(i, wingLB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
-    wingRB.setPixelColor(i, wingRB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+  for (int i = (Num_Leds_Head * 2 / 3); i < Num_Leds_Head; i++) {  //colouring the second part of the head
+    head.setPixelColor(i, head.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+  }
+  for (int i = (Num_Leds_Tail * 2 / 3); i < Num_Leds_Tail; i++) {  //colouring the second part of the tail
+    tail.setPixelColor(i, tail.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
   }
 
   return 1;
@@ -205,11 +244,13 @@ int returnValT1 = 0;
 int mode_Travel_1(int intervalT1, int arDATA[4]) {  //travel from tail tip to head
   returnValT1 = 0;
   int arRGB[3];
+  int subColRGB[3];
   unsigned long currentMillisT1 = millis();
   if (currentMillisT1 - previousMillisT1 >= intervalT1) {
     previousMillisT1 = currentMillisT1;
 
     lightLED(arDATA[0], 1, arDATA[2], NULL);
+    blendColorsRGBW(arDATA, subColRGB);  //fetching the perfect blend
     switch (state) {
       case 0:
         lightLED(arDATA[1], 2, arDATA[3], arRGB);
@@ -218,7 +259,12 @@ int mode_Travel_1(int intervalT1, int arDATA[4]) {  //travel from tail tip to he
       case 1:  // Tail; end to tip
         travelLength = Num_Leds_Tail;
         for (int i = PulseWidthT1; i > 0; i--) {
-          tail.setPixelColor(travelLength - (position - (PulseWidthT1 / 2) + i), tail.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+          int pos = travelLength - (position - (PulseWidthT1 / 2) + i);
+          for (int j = 0; j < PulseWidthT1 / 2; j++) {
+            tail.setPixelColor(pos-j, tail.Color(subColRGB[0], subColRGB[1], subColRGB[2], subColRGB[3]));
+            tail.setPixelColor(pos+j, tail.Color(subColRGB[0], subColRGB[1], subColRGB[2], subColRGB[3]));
+          }
+          tail.setPixelColor(pos, tail.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
         }
         position++;
         break;  //needs to be inverted, from end to body
@@ -226,8 +272,13 @@ int mode_Travel_1(int intervalT1, int arDATA[4]) {  //travel from tail tip to he
       case 2:  // Back wings; begin to end, both sides
         travelLength = Num_Leds_Wings;
         for (int i = 0; i < PulseWidthT1; i++) {
-          wingLB.setPixelColor(position - (PulseWidthT1 / 2) + i, wingLB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
-          wingRB.setPixelColor(position - (PulseWidthT1 / 2) + i, wingRB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+          int pos = position - (PulseWidthT1 / 2) + i;
+          for (int j = 0; j < PulseWidthT1 / 2; j++) {
+            wingLB.setPixelColor(pos-j, wingLB.Color(subColRGB[0], subColRGB[1], subColRGB[2], subColRGB[3]));
+            wingRB.setPixelColor(pos+j, wingRB.Color(subColRGB[0], subColRGB[1], subColRGB[2], subColRGB[3]));
+          }
+          wingLB.setPixelColor(pos, wingLB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+          wingRB.setPixelColor(pos, wingRB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
         }
         position++;
         break;
@@ -235,12 +286,17 @@ int mode_Travel_1(int intervalT1, int arDATA[4]) {  //travel from tail tip to he
       case 3:  // Front wings; begin to end, both sides
         travelLength = Num_Leds_Wings;
         for (int i = 0; i < PulseWidthT1; i++) {
-          wingLF.setPixelColor(position - (PulseWidthT1 / 2) + i, wingLF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
-          wingRF.setPixelColor(position - (PulseWidthT1 / 2) + i, wingRF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+          int pos = position - (PulseWidthT1 / 2) + i;
+          for (int j = 0; j < PulseWidthT1 / 2; j++) {
+            wingLF.setPixelColor(pos-j, wingLF.Color(subColRGB[0], subColRGB[1], subColRGB[2], subColRGB[3]));
+            wingRF.setPixelColor(pos+j, wingRF.Color(subColRGB[0], subColRGB[1], subColRGB[2], subColRGB[3]));
+          }
+          wingLF.setPixelColor(pos, wingLF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+          wingRF.setPixelColor(pos, wingRF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
         }
         position++;
         break;
-      case 4:  //head; light up both eyes
+      case 4:  //head; light up both eyes //change to 3 colour move; base > blend > accent
         head.fill(head.Color(arRGB[0] - iT1, arRGB[1] - iT1, arRGB[2] - iT1, arRGB[3]));
         if (iT1 >= 200) {
           position = travelLength * 2;
@@ -288,7 +344,7 @@ int mode_Travel_2(int interval, int mode, int arDATA[4]) {  //travel from body t
       tail.fill(tail.Color(arRGBb[0], arRGBb[1], arRGBb[2], arRGBb[3]));
     }
     for (int i = 0; i < PulseWidthT2; i++) {
-      int posT = positionT2W - PulseWidthT2 + i;
+      int posT = positionT2T - PulseWidthT2 + i;
       tail.setPixelColor(posT, tail.Color(arRGBf[0], arRGBf[1], arRGBf[2], arRGBf[3]));
     }
     positionT2T++;
@@ -327,32 +383,50 @@ int mode_Travel_2(int interval, int mode, int arDATA[4]) {  //travel from body t
 }
 
 unsigned long previousMillisHB = 0;
-int minToMil = 60000;
-int i = 0;
+unsigned int minToMil = 60000;
+int hbJumps = 50;  // Adjust as needed for smoothness
+int hbBrightness = 0;
+bool hbDir = false;
+
 /**************************************************************************/
-//Function for showing a heartbeat on the wings of the dragonfly
-//Input int beepRate; heartrate in multiplications of 10ms
+// Function for showing a heartbeat on the wings of the dragonfly
+// Input: int BPM; heartrate in beats per minute
 /**************************************************************************/
 int mode_Heartbeat(int BPM) {
 
   unsigned long currentMillisHB = millis();
-  if ((currentMillisHB - previousMillisHB) >= (minToMil / BPM)) {
-    // save the last time you blinked the LED
-    previousMillisHB = currentMillisHB;
-    if (i == 0) i = 1;
-    else i = 0;
+
+  if ((currentMillisHB - previousMillisHB) >= (minToMil / BPM / (hbJumps * 2))) {
+    previousMillisHB = currentMillisHB;  // Save the last time we changed brightness
+    // Debug output for monitoring
+    Serial.print("Mode - Wing");
+    Serial.print(": Brightness ");
+    Serial.println(hbBrightness);
+
+    // Set brightness for all parts
+    wingLF.fill(wingLF.Color(hbBrightness, 0, 0, 0));
+    wingRF.fill(wingRF.Color(hbBrightness, 0, 0, 0));
+    wingLB.fill(wingLB.Color(hbBrightness, 0, 0, 0));
+    wingRB.fill(wingRB.Color(hbBrightness, 0, 0, 0));
+
+    head.fill(head.Color(hbBrightness, 0, 0, 0));
+    tail.fill(tail.Color(hbBrightness, 0, 0, 0));
+
+    // Update brightness with direction control
+    if (!hbDir) {
+      hbBrightness += 5;
+      if (hbBrightness >= 250) hbDir = true;  // Change direction when max brightness reached
+    } else {
+      hbBrightness -= 5;
+      if (hbBrightness <= 0) hbDir = false;  // Change direction when min brightness reached
+    }
   }
-  //output the mode
-  switch (i) {
-    case 0:  //Low
-      lightLED(2, 1, 20, NULL);
-      break;
-    case 1:  //Peak
-      lightLED(2, 1, 100, NULL);
-      break;
-  }
-  return 1;
+
+  // Return 1 when brightness is back to 0, otherwise 0
+  if (hbBrightness == 0) return 1;
+  else return 0;
 }
+
 
 /**************************************************************************/
 //Function for having a light spectacle around the center of the body, including eyes and head
@@ -407,6 +481,21 @@ int mode_Wing(int speed, int arDATA[4]) {
       wingLB.setPixelColor(ledPos, wingLB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
       wingRB.setPixelColor(ledPos, wingRB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
     }
+  }
+}
+
+/**************************************************************************/
+//Function for returning the predetermined colour pairs
+//Input int colourpair; Location of the colour pair in the case statement.
+//Input int* returnArr; Pointer to array passed along for returning the values.
+/**************************************************************************/
+int blendColorsRGBW(int* colorArr, int* arrRGBWt) {
+  int arrRGBW1[3];
+  int arrRGBW2[3];
+  lightLED(colorArr[0], 2, colorArr[2], arrRGBW1);
+  lightLED(colorArr[1], 2, colorArr[3], arrRGBW2);
+  for (int i = 0; i < 4; i++) {
+    arrRGBWt[i] = (arrRGBW1[i] + arrRGBW2[i]) / 2;
   }
 }
 
@@ -690,7 +779,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
 
 
       /*    This somehow breaks the tail and head LED strips..      */
-      /*    case 27:  // Pink and Light Green
+    case 27:  // Pink and Light Green
 #ifdef DEBUG
       Serial.println("Inner Pink - Outer Light Green");
 #endif
@@ -738,7 +827,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       outerColour = 12;      // Light Blue
       innerBrightness = 80;  // Inner brightness for Sea Green
       outerBrightness = 60;  // Outer brightness for Light Blue
-      break;*/
+      break;
   }
   returnArr[0] = innerColour;
   returnArr[1] = outerColour;
