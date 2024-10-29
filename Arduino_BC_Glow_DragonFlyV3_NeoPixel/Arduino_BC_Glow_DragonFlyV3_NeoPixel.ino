@@ -3,7 +3,16 @@ Dont forget to include the eyes and tail in most modes
 check all code for comments
 
 */
-#define DEBUG
+#define DEBUG 1
+/*            DEBUG instructions            */
+// DEBUG 0 -- Mainly for finished product use, so no debugging info is printed.
+// DEBUG 1 -- Basic info printed to show the main steps of the program.
+// DEBUG 2 -- Detailed info printed to show what each function is doing.
+
+#define MCU ESP
+/*  just for me   */
+// MCU -- ESP
+// MCU -- MEGA
 #define synchronization
 
 #ifdef synchronization
@@ -27,14 +36,22 @@ check all code for comments
 #define Num_Leds_Head 6
 #define Num_Leds_Tail 31
 
-
-//To be determined
+//for conveniently switching MCUs
+#if MCU == ESP
 #define datWingLF 5
 #define datWingRF 6
 #define datWingLB 9
 #define datWingRB 10
 #define datHead 3
 #define datTail 11
+#elif MCU == MEGA
+#define datWingLF 35
+#define datWingRF 32
+#define datWingLB 33
+#define datWingRB 25
+#define datHead 34
+#define datTail 26
+#endif
 
 //The 4 wings, might have varying amount of LEDs
 Adafruit_NeoPixel wingLF = Adafruit_NeoPixel(Num_Leds_Wings, datWingLF, LED_TYPE);
@@ -46,7 +63,7 @@ Adafruit_NeoPixel tail = Adafruit_NeoPixel(Num_Leds_Tail, datTail, LED_TYPE);
 
 
 //usable variables
-int Modes = 2;
+int Modes = 3;
 int returnVar = 0;
 int arDATALoop[4];
 int randColor = 0, randColorBuf = 0;
@@ -107,10 +124,10 @@ void loop() {
       break;
     case Travel1:  //Light travels from tail to head across the wings
                    //works perfectly, takes 8.3 seconds per cycle
-      returnVar = mode_Travel_1(500, arDATALoop);
+      returnVar = mode_Travel_1(50, arDATALoop);
       break;
     case Travel2:  //Light travels from the center of the dragonfly to the outside
-      returnVar = mode_Travel_2(2000, 0, arDATALoop);
+      returnVar = mode_Travel_2(2000, arDATALoop);
       break;
     case Heartbeat:  //Butterfly mimics a heartbeat
                      //feels off, make it feel more like a heartbeat, you know. with the LEDs slowly lighting up.
@@ -121,7 +138,7 @@ void loop() {
       returnVar = mode_Spiral(0, arDATALoop);
       break;
     case Wing:  //Light slowly travels across it's wings matching it's flapping speed
-      returnVar = mode_Wing(0, arDATALoop);
+      returnVar = mode_Wing(100, arDATALoop);
       break;
   }
   wingLF.show();
@@ -131,33 +148,23 @@ void loop() {
   head.show();
   tail.show();
 
+  if (returnVar == 1) {
+    while (randColor == randColorBuf) {
+      randColor = random(32);
+    }
+    randColorBuf = randColor;
+  }
 
   unsigned long currentMillis = millis();
   if (currentMillis - previousMillis >= interval && returnVar == 1) {  //5min interval timer to switch up the lighting effects
     //save the last time you switched modes
     previousMillis = currentMillis;
-    while (randColor == randColorBuf) {
-      randColor = random(32);
-    }
-#ifdef DEBUG
+
+#if DEBUG > 0
     Serial.println("Fetching a new colorcombo");
 #endif
     fetchColourCombo(randColor, arDATALoop);
-    randColorBuf = randColor;
     returnVar = 0;
-    wingLF.clear();
-    wingRF.clear();
-    wingLB.clear();
-    wingRB.clear();
-    head.clear();
-    tail.clear();
-
-    wingLF.show();
-    wingRF.show();
-    wingLB.show();
-    wingRB.show();
-    head.show();
-    tail.show();
 
 
     /*if (returnVar == 1) {
@@ -261,8 +268,8 @@ int mode_Travel_1(int intervalT1, int arDATA[4]) {  //travel from tail tip to he
         for (int i = PulseWidthT1; i > 0; i--) {
           int pos = travelLength - (position - (PulseWidthT1 / 2) + i);
           for (int j = 0; j < PulseWidthT1 / 2; j++) {
-            tail.setPixelColor(pos-j, tail.Color(subColRGB[0], subColRGB[1], subColRGB[2], subColRGB[3]));
-            tail.setPixelColor(pos+j, tail.Color(subColRGB[0], subColRGB[1], subColRGB[2], subColRGB[3]));
+            tail.setPixelColor(pos - j, tail.Color(subColRGB[0], subColRGB[1], subColRGB[2], subColRGB[3]));
+            tail.setPixelColor(pos + j, tail.Color(subColRGB[0], subColRGB[1], subColRGB[2], subColRGB[3]));
           }
           tail.setPixelColor(pos, tail.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
         }
@@ -274,8 +281,8 @@ int mode_Travel_1(int intervalT1, int arDATA[4]) {  //travel from tail tip to he
         for (int i = 0; i < PulseWidthT1; i++) {
           int pos = position - (PulseWidthT1 / 2) + i;
           for (int j = 0; j < PulseWidthT1 / 2; j++) {
-            wingLB.setPixelColor(pos-j, wingLB.Color(subColRGB[0], subColRGB[1], subColRGB[2], subColRGB[3]));
-            wingRB.setPixelColor(pos+j, wingRB.Color(subColRGB[0], subColRGB[1], subColRGB[2], subColRGB[3]));
+            wingLB.setPixelColor(pos - j, wingLB.Color(subColRGB[0], subColRGB[1], subColRGB[2], subColRGB[3]));
+            wingRB.setPixelColor(pos + j, wingRB.Color(subColRGB[0], subColRGB[1], subColRGB[2], subColRGB[3]));
           }
           wingLB.setPixelColor(pos, wingLB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
           wingRB.setPixelColor(pos, wingRB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
@@ -288,14 +295,17 @@ int mode_Travel_1(int intervalT1, int arDATA[4]) {  //travel from tail tip to he
         for (int i = 0; i < PulseWidthT1; i++) {
           int pos = position - (PulseWidthT1 / 2) + i;
           for (int j = 0; j < PulseWidthT1 / 2; j++) {
-            wingLF.setPixelColor(pos-j, wingLF.Color(subColRGB[0], subColRGB[1], subColRGB[2], subColRGB[3]));
-            wingRF.setPixelColor(pos+j, wingRF.Color(subColRGB[0], subColRGB[1], subColRGB[2], subColRGB[3]));
+            wingLF.setPixelColor(pos - j, wingLF.Color(subColRGB[0], subColRGB[1], subColRGB[2], subColRGB[3]));
+            wingRF.setPixelColor(pos + j, wingRF.Color(subColRGB[0], subColRGB[1], subColRGB[2], subColRGB[3]));
           }
           wingLF.setPixelColor(pos, wingLF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
           wingRF.setPixelColor(pos, wingRF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
         }
         position++;
         break;
+        /****************************************************/
+        /*              This needs to be fixed              */
+        /****************************************************/
       case 4:  //head; light up both eyes //change to 3 colour move; base > blend > accent
         head.fill(head.Color(arRGB[0] - iT1, arRGB[1] - iT1, arRGB[2] - iT1, arRGB[3]));
         if (iT1 >= 200) {
@@ -305,6 +315,9 @@ int mode_Travel_1(int intervalT1, int arDATA[4]) {  //travel from tail tip to he
 
         break;
     }
+    /****************************************************/
+    /*              This needs to be fixed              */
+    /****************************************************/
     if (position >= travelLength + PulseWidthT1 || state == 0) {
       position = 0;  // - (PulseWidth / 2);
       state++;
@@ -320,65 +333,60 @@ int mode_Travel_1(int intervalT1, int arDATA[4]) {  //travel from tail tip to he
 int PulseWidthT2 = 10;
 int positionT2W = 0, positionT2T = 0;
 unsigned long previousMillisT2W = 0, previousMillisT2T = 0, previousMillisT2H = 0;
-int mode_Travel_2(int interval, int mode, int arDATA[4]) {  //travel from body to ends
+int run2 = 0;
+int mode_Travel_2(int interval, int arDATA[4]) {  //travel from body to ends
   int returnValT2 = 0;
-  int arRGBf[3];
-  int arRGBb[3];
+  int arRGB[3];
 
-  lightLED(arDATA[1], 2, arDATA[3], arRGBf);  //fetching the front (aka, moving) colour
-  lightLED(arDATA[0], 2, arDATA[2], arRGBb);  //fetching the background colour
+  if (run2 == 0) {
+    lightLED(arDATA[1], 2, arDATA[3], arRGB);  //fetching the initial colour
+  } else {
+    lightLED(arDATA[0], 2, arDATA[2], arRGB);  //run the second colour
+  }
 
   unsigned long currentMillisT2 = millis();
 
   if (currentMillisT2 - previousMillisT2H >= (interval / Num_Leds_Head)) {  //Head
     previousMillisT2H = currentMillisT2;
-    if (mode == 1) {
-      head.fill(head.Color(arRGBb[0], arRGBb[1], arRGBb[2], arRGBb[3]));
-    } else {
-      head.fill(head.Color(arRGBf[0], arRGBf[1], arRGBf[2], arRGBf[3]));
-    }
+    head.fill(head.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
   }
   if (currentMillisT2 - previousMillisT2T >= (interval / (Num_Leds_Tail + PulseWidthT2))) {  //Tail
     previousMillisT2T = currentMillisT2;
-    if (mode == 1) {
-      tail.fill(tail.Color(arRGBb[0], arRGBb[1], arRGBb[2], arRGBb[3]));
-    }
     for (int i = 0; i < PulseWidthT2; i++) {
       int posT = positionT2T - PulseWidthT2 + i;
-      tail.setPixelColor(posT, tail.Color(arRGBf[0], arRGBf[1], arRGBf[2], arRGBf[3]));
+      tail.setPixelColor(posT, tail.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
     }
     positionT2T++;
   }
   if (currentMillisT2 - previousMillisT2W >= (interval / (Num_Leds_Wings + PulseWidthT2))) {  //Wings
     previousMillisT2W = currentMillisT2;
-    if (mode == 1) {
-      wingLF.fill(wingLF.Color(arRGBb[0], arRGBb[1], arRGBb[2], arRGBb[3]));  //setting the background colour
-      wingRF.fill(wingRF.Color(arRGBb[0], arRGBb[1], arRGBb[2], arRGBb[3]));
-      wingLB.fill(wingLB.Color(arRGBb[0], arRGBb[1], arRGBb[2], arRGBb[3]));
-      wingRB.fill(wingRB.Color(arRGBb[0], arRGBb[1], arRGBb[2], arRGBb[3]));
-    }
     for (int i = 0; i < PulseWidthT2; i++) {
       int posW = positionT2W - PulseWidthT2 + i;
-      wingLF.setPixelColor(posW, wingLF.Color(arRGBf[0], arRGBf[1], arRGBf[2], arRGBf[3]));
-      wingRF.setPixelColor(posW, wingRF.Color(arRGBf[0], arRGBf[1], arRGBf[2], arRGBf[3]));
-      wingLB.setPixelColor(posW, wingLB.Color(arRGBf[0], arRGBf[1], arRGBf[2], arRGBf[3]));
-      wingRB.setPixelColor(posW, wingRB.Color(arRGBf[0], arRGBf[1], arRGBf[2], arRGBf[3]));
+      wingLF.setPixelColor(posW, wingLF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+      wingRF.setPixelColor(posW, wingRF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+      wingLB.setPixelColor(posW, wingLB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+      wingRB.setPixelColor(posW, wingRB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
     }
+
     positionT2W++;
   }
-  if (mode == 1) {
-    if (positionT2W >= Num_Leds_Wings + PulseWidthT2 && positionT2T >= Num_Leds_Tail + PulseWidthT2) {
-      positionT2W = 0;
-      positionT2T = 0;
-      returnValT2 = 1;
-    }
-  } else {
-    if (positionT2W >= Num_Leds_Wings && positionT2T >= Num_Leds_Tail) {
-      positionT2W = 0;
-      positionT2T = 0;
+#if DEBUG > 1
+  Serial.print("posT2Wing : ");
+  Serial.println(positionT2W);
+  Serial.print("posT2Tail : ");
+  Serial.println(positionT2T);
+#endif
+  if (positionT2W >= Num_Leds_Wings && positionT2T >= Num_Leds_Tail) {
+    positionT2W = 0;
+    positionT2T = 0;
+    if (run2 == 0) {
+      run2 = 1;
+    } else {
+      run2 = 0;
       returnValT2 = 1;
     }
   }
+
   return returnValT2;
 }
 
@@ -398,11 +406,12 @@ int mode_Heartbeat(int BPM) {
 
   if ((currentMillisHB - previousMillisHB) >= (minToMil / BPM / (hbJumps * 2))) {
     previousMillisHB = currentMillisHB;  // Save the last time we changed brightness
-    // Debug output for monitoring
+// Debug output for monitoring
+#if DEBUG > 1
     Serial.print("Mode - Wing");
     Serial.print(": Brightness ");
     Serial.println(hbBrightness);
-
+#endif
     // Set brightness for all parts
     wingLF.fill(wingLF.Color(hbBrightness, 0, 0, 0));
     wingRF.fill(wingRF.Color(hbBrightness, 0, 0, 0));
@@ -449,30 +458,32 @@ int mode_Spiral(int speed, int arDATA[4]) {
 
 
 int beginMC = Num_Leds_Wings;
-int lengthMC = 5;
+int lengthMC = Num_Leds_Wings / 2;
+int returnValW = 0;
 unsigned long previousMillisWM = 0;
 int mode_Wing(int speed, int arDATA[4]) {
   int arRGB[3];
+  returnValW = 0;
 
 
 
-  lightLED(arDATA[1], 2, arDATA[3], arRGB);  //applying the background colour
-  for (int i = 0; i < Num_Leds_Wings; i++) {
-    wingLF.setPixelColor(i, wingLF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
-    wingRF.setPixelColor(i, wingRF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
-    wingLB.setPixelColor(i, wingLB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
-    wingRB.setPixelColor(i, wingRB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
-  }
-
-  lightLED(arDATA[0], 2, arDATA[2], arRGB);  //applying the background colour
   //applying the traveling colour
   unsigned long currentMillisWM = millis();
   if (currentMillisWM - previousMillisWM >= speed) {
     previousMillisWM = currentMillisWM;
+    lightLED(arDATA[1], 2, arDATA[3], arRGB);  //applying the background colour
 
+    wingLF.fill(wingLF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+    wingRF.fill(wingRF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+    wingLB.fill(wingLB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+    wingRB.fill(wingRB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+
+
+    lightLED(arDATA[0], 2, arDATA[2], arRGB);  //applying the background colour
     beginMC++;
     if (beginMC > Num_Leds_Wings) {
       beginMC = 0;
+      returnValW = 1;
     }
     for (int i = 0; i < lengthMC; i++) {
       int ledPos = (beginMC + i) % Num_Leds_Wings;  // Calculate the current LED position
@@ -508,7 +519,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
   int innerColour = 0, outerColour = 0, innerBrightness = 0, outerBrightness = 0;
   switch (colourPair) {
     case 0:  // Red and Cyan
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Red - Outer Cyan");
 #endif
       innerColour = 2;       // Red
@@ -518,7 +529,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 1:  // Green and Magenta
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Green - Outer Magenta");
 #endif
       innerColour = 3;       // Green
@@ -528,7 +539,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 2:  // Blue and Yellow
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Blue - Outer Yellow");
 #endif
       innerColour = 4;       // Blue
@@ -538,7 +549,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 3:  // Orange and Teal
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Orange - Outer Teal");
 #endif
       innerColour = 8;       // Orange
@@ -548,7 +559,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 4:  // Pink and Light Blue
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Pink - Outer Light Blue");
 #endif
       innerColour = 10;      // Pink
@@ -558,7 +569,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 5:  // Gold and Charcoal
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Gold - Outer Charcoal");
 #endif
       innerColour = 11;      // Gold
@@ -568,7 +579,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 6:  // Lavender and Dark Blue
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Lavender - Outer Dark Blue");
 #endif
       innerColour = 14;      // Lavender
@@ -578,7 +589,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 7:  // Mint and Brown
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Mint - Outer Brown");
 #endif
       innerColour = 16;      // Mint
@@ -588,7 +599,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 8:  // Salmon and Light Green
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Salmon - Outer Light Green");
 #endif
       innerColour = 17;      // Salmon
@@ -598,7 +609,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 9:  // Sea Green and Peach
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Sea Green - Outer Peach");
 #endif
       innerColour = 28;      // Sea Green
@@ -608,7 +619,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 10:  // Light Yellow and Indigo
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Light Yellow - Outer Indigo");
 #endif
       innerColour = 26;      // Light Yellow
@@ -618,7 +629,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 11:  // Purple and Gold
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Purple - Outer Gold");
 #endif
       innerColour = 9;       // Purple
@@ -628,7 +639,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 12:  // Coral and Light Blue
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Coral - Outer Light Blue");
 #endif
       innerColour = 15;      // Coral
@@ -638,7 +649,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 13:  // Light Green and Charcoal
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Light Green - Outer Charcoal");
 #endif
       innerColour = 25;      // Light Green
@@ -648,7 +659,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 14:  // Mint and Lavender
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Mint - Outer Lavender");
 #endif
       innerColour = 16;      // Mint
@@ -658,7 +669,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 15:  // Pink and Gold
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Pink - Outer Gold");
 #endif
       innerColour = 10;      // Pink
@@ -668,7 +679,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 16:  // Blue and Light Yellow
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Blue - Outer Light Yellow");
 #endif
       innerColour = 4;       // Blue
@@ -678,7 +689,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 17:  // Salmon and Light Blue
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Salmon - Outer Light Blue");
 #endif
       innerColour = 17;      // Salmon
@@ -688,7 +699,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 18:  // Sea Green and Indigo
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Sea Green - Outer Indigo");
 #endif
       innerColour = 28;      // Sea Green
@@ -698,7 +709,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 19:  // Orange and Lavender
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Orange - Outer Lavender");
 #endif
       innerColour = 8;       // Orange
@@ -708,7 +719,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 20:  // Teal and Coral
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Teal - Outer Coral");
 #endif
       innerColour = 13;      // Teal
@@ -718,7 +729,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 21:  // Dark Blue and Peach
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Dark Blue - Outer Peach");
 #endif
       innerColour = 29;      // Dark Blue
@@ -728,7 +739,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 22:  // Light Green and Mint
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Light Green - Outer Mint");
 #endif
       innerColour = 25;      // Light Green
@@ -738,7 +749,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 23:  // Light Blue and Salmon
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Light Blue - Outer Salmon");
 #endif
       innerColour = 12;      // Light Blue
@@ -748,7 +759,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 24:  // Coral and Sea Green
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Coral - Outer Sea Green");
 #endif
       innerColour = 15;      // Coral
@@ -758,7 +769,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 25:  // Gold and Light Green
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Gold - Outer Light Green");
 #endif
       innerColour = 11;      // Gold
@@ -768,7 +779,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 26:  // Light Yellow and Coral
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Light Yellow - Outer Coral");
 #endif
       innerColour = 26;      // Light Yellow
@@ -780,7 +791,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
 
       /*    This somehow breaks the tail and head LED strips..      */
     case 27:  // Pink and Light Green
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Pink - Outer Light Green");
 #endif
       innerColour = 10;      // Pink
@@ -790,7 +801,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 28:  // Indigo and Mint
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Indigo - Outer Mint");
 #endif
       innerColour = 20;      // Indigo
@@ -800,7 +811,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 29:  // Dark Blue and Light Yellow
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Dark Blue - Outer Light Yellow");
 #endif
       innerColour = 29;      // Dark Blue
@@ -810,7 +821,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 30:  // Teal and Gold
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Teal - Outer Gold");
 #endif
       innerColour = 13;      // Teal
@@ -820,7 +831,7 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       break;
 
     case 31:  // Sea Green and Light Blue
-#ifdef DEBUG
+#if DEBUG > 0
       Serial.println("Inner Sea Green - Outer Light Blue");
 #endif
       innerColour = 28;      // Sea Green
