@@ -1,22 +1,44 @@
-/*
-Dont forget to include the eyes and tail in most modes
-check all code for comments
-
-*/
 #define DEBUG 1
 /*            DEBUG instructions            */
 // DEBUG 0 -- Mainly for finished product use, so no debugging info is printed.
 // DEBUG 1 -- Basic info printed to show the main steps of the program.
 // DEBUG 2 -- Detailed info printed to show what each function is doing.
 
-#define MCU ESP
-/*  just for me   */
-// MCU -- ESP
-// MCU -- MEGA
 #define synchronization
 
-#ifdef synchronization
 
+#ifdef synchronization
+#include <WiFi.h>
+#include <ESPmDNS.h>
+#include <NetworkUdp.h>
+#include <ArduinoOTA.h>
+
+//change this to your hotspot..
+const char* ssid = "";
+const char* password = "";
+
+const char* name = "MasterESP";
+
+//Struct data to utalise when sending data via ESP-NOW
+typedef struct usefulInfo {
+  uint8_t animationMode;   //1 byte
+  int speed;               //2 bytes
+  uint8_t colorCombo;      //1 byte
+  unsigned long interval;  //4bytes
+  uint64_t checksum;
+} usefulInfo;
+usefulInfo espData;
+
+#include <esp_now.h>
+uint8_t wideBroadcastAddress[] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+//uint8_t bcAESP1[] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+//uint8_t bcAESP2[] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+//uint8_t bcAESP3[] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+//uint8_t bcAESP4[] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+//uint8_t bcAESP5[] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+//uint8_t bcAESP6[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
+esp_now_peer_info_t peerInfo;
 #endif
 
 #include <Adafruit_NeoPixel.h>
@@ -37,33 +59,36 @@ check all code for comments
 #define Num_Leds_Tail 31
 
 //for conveniently switching MCUs
-#if MCU == ESP
+/*
+//for using with the arduino mega
 #define datWingLF 5
 #define datWingRF 6
 #define datWingLB 9
 #define datWingRB 10
 #define datHead 3
 #define datTail 11
-#elif MCU == MEGA
-#define datWingLF 35
-#define datWingRF 32
-#define datWingLB 33
-#define datWingRB 25
-#define datHead 34
-#define datTail 26
-#endif
+*/
+
+//for using with the ESP32
+#define datWingLF 27  //32
+#define datWingRF 33  //33
+#define datWingLB 25  //25
+#define datWingRB 26  //26
+#define datHead 32    //27
+#define datTail 14    //14
+
 
 //The 4 wings, might have varying amount of LEDs
-Adafruit_NeoPixel wingLF = Adafruit_NeoPixel(Num_Leds_Wings, datWingLF, LED_TYPE);
-Adafruit_NeoPixel wingRF = Adafruit_NeoPixel(Num_Leds_Wings, datWingRF, LED_TYPE);
-Adafruit_NeoPixel wingLB = Adafruit_NeoPixel(Num_Leds_Wings, datWingLB, LED_TYPE);
-Adafruit_NeoPixel wingRB = Adafruit_NeoPixel(Num_Leds_Wings, datWingRB, LED_TYPE);
-Adafruit_NeoPixel head = Adafruit_NeoPixel(Num_Leds_Head, datHead, LED_TYPE);
-Adafruit_NeoPixel tail = Adafruit_NeoPixel(Num_Leds_Tail, datTail, LED_TYPE);
+Adafruit_NeoPixel wingLF(Num_Leds_Wings, datWingLF, LED_TYPE);
+Adafruit_NeoPixel wingRF(Num_Leds_Wings, datWingRF, LED_TYPE);
+Adafruit_NeoPixel wingLB(Num_Leds_Wings, datWingLB, LED_TYPE);
+Adafruit_NeoPixel wingRB(Num_Leds_Wings, datWingRB, LED_TYPE);
+Adafruit_NeoPixel head(Num_Leds_Head, datHead, LED_TYPE);
+Adafruit_NeoPixel tail(Num_Leds_Tail, datTail, LED_TYPE);
 
 
 //usable variables
-int Modes = 3;
+int Modes = 4;
 int returnVar = 0;
 int arDATALoop[4];
 int randColor = 0, randColorBuf = 0;
@@ -73,6 +98,7 @@ unsigned long previousMillis = 0;
 unsigned long interval = 1000 * 10;  //5min delay
 
 void setup() {
+  delay(100);
   //initialize all the LEDstrips
   wingLF.begin();
   wingRF.begin();
@@ -89,21 +115,92 @@ void setup() {
   head.clear();
   tail.clear();
 
-  delay(50);
+  Serial.begin(115200);
+  Serial.println("V3.2 - ESP32; GLOW Dragonfly");
+  Serial.println(name);
 
 
-
-  Serial.begin(9600);
 //ESP_NOW setup
 #ifdef synchronization
-
-#endif
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  while (WiFi.waitForConnectResult() != WL_CONNECTED) {
+    Serial.println("Connection Failed! Rebooting...");
+    mode_Static(2, 100);
+    delay(5000);
+    ESP.restart();
+  }
+  ArduinoOTA.setHostname(name);
+  ArduinoOTA.setPassword("Glow");
   delay(1000);
-  fetchColourCombo(random(32), arDATALoop);
+
+  //OTA Handler
+  ArduinoOTA
+    .onStart([]() {
+      String type;
+      if (ArduinoOTA.getCommand() == U_FLASH) {
+        type = "sketch";
+      } else {  // U_SPIFFS
+        type = "filesystem";
+      }
+
+      // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
+      Serial.println("Start updating " + type);
+    })
+    .onEnd([]() {
+      Serial.println("\nEnd");
+    })
+    .onProgress([](unsigned int progress, unsigned int total) {
+      unsigned int Download = (progress / (total / 100));
+      Serial.printf("Progress: %u%%\r", progress);
+    })
+    .onError([](ota_error_t error) {
+      Serial.printf("Error[%u]: ", error);
+      if (error == OTA_AUTH_ERROR) {
+        Serial.println("Auth Failed");
+      } else if (error == OTA_BEGIN_ERROR) {
+        Serial.println("Begin Failed");
+      } else if (error == OTA_CONNECT_ERROR) {
+        Serial.println("Connect Failed");
+      } else if (error == OTA_RECEIVE_ERROR) {
+        Serial.println("Receive Failed");
+      } else if (error == OTA_END_ERROR) {
+        Serial.println("End Failed");
+      }
+    });
+
+  ArduinoOTA.begin();
+#endif
+#if DEBUG > 0
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+#endif
+  //initializing ESP-NOW
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("Error initializing ESP-NOW");
+    return;
+  }
+  //registering a callback function for when data is send
+  esp_now_register_send_cb(OnDataSent);
+  //Just yeeting it out there
+  addPeer(wideBroadcastAddress);
+
+  delay(5000);
+  Serial.println("Testing");
+    delay(5000);
+  Serial.println("Testing");
+    fetchColourCombo(random(32), arDATALoop);
   //Implement Jaspers crazy ass idea of synchronization
 }
 
 void loop() {
+  yield();
+  ArduinoOTA.handle();
+  //Keep your hands of this.. this is necessary
+
+#if DEBUG > 1
+  Serial.println("Do the loopy the loop and pull, now your shoes are looking cool");
+#endif
   //light starts traveling from the tip of his tail towards his body, it then spreads through his back wings. halfway there it starts in the front wings. and halfway there it travels to the head.
   //where it lights up until the wings have gone off.
   //Mode 0, static.
@@ -116,31 +213,55 @@ void loop() {
   switch (Modes) {
     case Static:  //static one colour, only used during startup phase
                   //Works fine
+#if DEBUG > 1
+      Serial.println("Entering mode: Static");
+#endif
       returnVar = mode_Static(1, 100);
       break;
     case Static_P:  //dual colour static
                     //Works fine, except for there being no delay. So add blink without delay to it
+#if DEBUG > 1
+      Serial.println("Entering mode: Static Double");
+#endif
       returnVar = mode_Static_P(arDATALoop);
       break;
     case Travel1:  //Light travels from tail to head across the wings
                    //works perfectly, takes 8.3 seconds per cycle
+#if DEBUG > 1
+      Serial.println("Entering mode: Travel 1");
+#endif
       returnVar = mode_Travel_1(50, arDATALoop);
       break;
     case Travel2:  //Light travels from the center of the dragonfly to the outside
+#if DEBUG > 1
+      Serial.print("Entering mode: Travel 2");
+#endif
       returnVar = mode_Travel_2(2000, arDATALoop);
       break;
     case Heartbeat:  //Butterfly mimics a heartbeat
                      //feels off, make it feel more like a heartbeat, you know. with the LEDs slowly lighting up.
                      //also the heartrate doesn't really work that well (60bps is faster then 120bps)
-      returnVar = mode_Heartbeat(120);
+#if DEBUG > 1
+      Serial.println("Entering mode: Heartbeat");
+#endif
+      returnVar = mode_Heartbeat(60);
       break;
     case Spiral:  //Light spiral across it's body
+#if DEBUG > 1
+      Serial.println("Entering mode: Spiral");
+#endif
       returnVar = mode_Spiral(0, arDATALoop);
       break;
     case Wing:  //Light slowly travels across it's wings matching it's flapping speed
+#if DEBUG > 1
+      Serial.println("Entering mode: Wing");
+#endif
       returnVar = mode_Wing(100, arDATALoop);
       break;
   }
+#if DEBUG > 1
+  Serial.println("Displaying LEDs");
+#endif
   wingLF.show();
   wingRF.show();
   wingLB.show();
@@ -154,12 +275,13 @@ void loop() {
     }
     randColorBuf = randColor;
   }
-
   unsigned long currentMillis = millis();
   if (currentMillis - previousMillis >= interval && returnVar == 1) {  //5min interval timer to switch up the lighting effects
     //save the last time you switched modes
     previousMillis = currentMillis;
-
+#if DEBUG > 1
+    Serial.println("Entering new mode. Whoop whoop");
+#endif
 #if DEBUG > 0
     Serial.println("Fetching a new colorcombo");
 #endif
@@ -167,14 +289,33 @@ void loop() {
     returnVar = 0;
 
 
-    /*if (returnVar == 1) {
+    /*    Go put this in a seperate loop    */
+    /*    Go put this in a seperate loop    */
+
+    espData.animationMode = 254;
+    espData.speed = 32000;
+    espData.colorCombo = 38;
+    espData.interval = 5000000;
+    espData.checksum = 254 + 32000 + 38 + 5000000;
+
+
+    esp_err_t result = esp_now_send(wideBroadcastAddress, (uint8_t*)&espData, sizeof(espData));
+    if (result == ESP_OK) {
+      Serial.println("Sent with success");
+    } else {
+      Serial.println("Error sending the data");
+    }
+    /*    Go put this in a seperate loop    */
+    /*    Go put this in a seperate loop    */
+  }
+
+  /*if (returnVar == 1) {
       if (Modes == Wing) {
         Modes = 1;
       } else {
         Modes++;
       }
     }*/
-  }
 }
 
 /*  Various displaying modes  */
@@ -185,10 +326,15 @@ void loop() {
 //Input brightness; .. .. ..
 /**************************************************************************/
 int mode_Static(int colour, int brightness) {
-  // wingLF[0] = CRGB::Red;
-  // wingRF[0] = CRGB(255, 255, 255);
+// wingLF[0] = CRGB::Red;
+// wingRF[0] = CRGB(255, 255, 255);
+#if DEBUG > 1
+  Serial.println("Entered mode: Static");
+#endif
   lightLED(colour, 1, brightness, NULL);
-
+#if DEBUG > 1
+  Serial.println("Leaving mode: Static");
+#endif
   return 1;
 }
 
@@ -243,6 +389,11 @@ int mode_Static_P(int arDATA[4]) {  //clean this up and merge with lightLED
 //Function for light traveling from tail to head.
 //Input intervalT1, interval time during the traveling of the LEDs
 /**************************************************************************/
+
+
+//that color mixing doesnt really work
+
+
 int travelLength = 0, position = 0;
 unsigned long previousMillisT1 = 0;
 int iT1 = 0, state = 0;
@@ -357,6 +508,10 @@ int mode_Travel_2(int interval, int arDATA[4]) {  //travel from body to ends
       tail.setPixelColor(posT, tail.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
     }
     positionT2T++;
+#if DEBUG > 1
+    Serial.print("posT2Tail : ");
+    Serial.println(positionT2T);
+#endif
   }
   if (currentMillisT2 - previousMillisT2W >= (interval / (Num_Leds_Wings + PulseWidthT2))) {  //Wings
     previousMillisT2W = currentMillisT2;
@@ -367,15 +522,14 @@ int mode_Travel_2(int interval, int arDATA[4]) {  //travel from body to ends
       wingLB.setPixelColor(posW, wingLB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
       wingRB.setPixelColor(posW, wingRB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
     }
-
     positionT2W++;
-  }
 #if DEBUG > 1
-  Serial.print("posT2Wing : ");
-  Serial.println(positionT2W);
-  Serial.print("posT2Tail : ");
-  Serial.println(positionT2T);
+    Serial.print("posT2Wing : ");
+    Serial.println(positionT2W);
 #endif
+  }
+  //when both trails have reached the end, run it again with the second colour. after that
+  //pass on the mode is done
   if (positionT2W >= Num_Leds_Wings && positionT2T >= Num_Leds_Tail) {
     positionT2W = 0;
     positionT2T = 0;
@@ -404,14 +558,18 @@ int mode_Heartbeat(int BPM) {
 
   unsigned long currentMillisHB = millis();
 
-  if ((currentMillisHB - previousMillisHB) >= (minToMil / BPM / (hbJumps * 2))) {
-    previousMillisHB = currentMillisHB;  // Save the last time we changed brightness
+  if ((currentMillisHB - previousMillisHB) >= (minToMil / (BPM * hbJumps * 2))) {
+
 // Debug output for monitoring
 #if DEBUG > 1
-    Serial.print("Mode - Wing");
+    Serial.println("Mode - Heartbeat");
     Serial.print(": Brightness ");
     Serial.println(hbBrightness);
+    unsigned long BPM = minToMil / ((currentMillisHB - previousMillisHB) * hbJumps * 2);
+    Serial.print("BPM : ");
+    Serial.println(BPM);
 #endif
+    previousMillisHB = currentMillisHB;  // Save the last time we changed brightness
     // Set brightness for all parts
     wingLF.fill(wingLF.Color(hbBrightness, 0, 0, 0));
     wingRF.fill(wingRF.Color(hbBrightness, 0, 0, 0));
@@ -500,7 +658,7 @@ int mode_Wing(int speed, int arDATA[4]) {
 //Input int colourpair; Location of the colour pair in the case statement.
 //Input int* returnArr; Pointer to array passed along for returning the values.
 /**************************************************************************/
-int blendColorsRGBW(int* colorArr, int* arrRGBWt) {
+void blendColorsRGBW(int* colorArr, int* arrRGBWt) {
   int arrRGBW1[3];
   int arrRGBW2[3];
   lightLED(colorArr[0], 2, colorArr[2], arrRGBW1);
@@ -515,7 +673,7 @@ int blendColorsRGBW(int* colorArr, int* arrRGBWt) {
 //Input int colourpair; Location of the colour pair in the case statement.
 //Input int* returnArr; Pointer to array passed along for returning the values.
 /**************************************************************************/
-int fetchColourCombo(int colourPair, int* returnArr) {
+void fetchColourCombo(int colourPair, int* returnArr) {
   int innerColour = 0, outerColour = 0, innerBrightness = 0, outerBrightness = 0;
   switch (colourPair) {
     case 0:  // Red and Cyan
@@ -840,6 +998,9 @@ int fetchColourCombo(int colourPair, int* returnArr) {
       outerBrightness = 60;  // Outer brightness for Light Blue
       break;
   }
+#if DEBUG > 1
+  Serial.println("Fetching complete, now returning");
+#endif
   returnArr[0] = innerColour;
   returnArr[1] = outerColour;
   returnArr[2] = innerBrightness;
@@ -853,8 +1014,11 @@ int fetchColourCombo(int colourPair, int* returnArr) {
 //Input int brightness; speaks for itself, doesn't it?
 //Input int* returnArRGB; Pointer to array passed along the RGB values adjusted with the brightness.
 /**************************************************************************/
-int lightLED(int colorCode, int mode, int brightness, int* returnArRGB) {
+void lightLED(int colorCode, int mode, int brightness, int* returnArRGB) {
   float G = 0, R = 0, B = 0, W = 0;
+#if DEBUG > 1
+  Serial.println("Getting the RGBW values your fat ass desires");
+#endif
   switch (colorCode) {
     case 0:  // Black
       // R, G, B, W are already initialized to 0, no need to change them.
@@ -1046,9 +1210,14 @@ int lightLED(int colorCode, int mode, int brightness, int* returnArRGB) {
       W = 0;
       break;
   }
-
+#if DEBUG > 1
+  Serial.println("Snatched them, lets go");
+#endif
 
   if (mode == 1) {
+#if DEBUG > 1
+    Serial.println("Filling her up to the brink");
+#endif
     wingLF.fill(wingLF.Color(R, G, B, W));
     wingRF.fill(wingRF.Color(R, G, B, W));
     wingLB.fill(wingLB.Color(R, G, B, W));
@@ -1056,9 +1225,38 @@ int lightLED(int colorCode, int mode, int brightness, int* returnArRGB) {
     head.fill(head.Color(R, G, B, W));
     tail.fill(tail.Color(R, G, B, W));
   } else if (mode == 2) {
+#if DEBUG > 1
+    Serial.println("Take it or leave it");
+#endif
     returnArRGB[0] = R;
     returnArRGB[1] = G;
     returnArRGB[2] = B;
     returnArRGB[3] = W;
   }
 }
+
+//All communication related shizzles
+void addPeer(uint8_t broadcastAddress[]) {
+  // Register peer
+  memcpy(peerInfo.peer_addr, broadcastAddress, 6);
+  peerInfo.channel = 0;
+  peerInfo.encrypt = false;
+
+  // Add peer
+  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+    Serial.print("Failed to add peer: ");
+    //Serial.print(broadcastAddress);
+    return;
+  }
+}
+void OnDataSent(const uint8_t* mac_addr, esp_now_send_status_t status) {
+  Serial.println("Data send");
+#if DEBUG > 1
+  if (status == ESP_NOW_SEND_SUCCESS) {
+    Serial.println("Delivery Success");
+  } else {
+    Serial.println("Delivery Fail");
+  }
+#endif
+}
+//void sendDataESPnow (uint8_t[] broadcastAddress, )
