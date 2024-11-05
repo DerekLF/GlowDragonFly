@@ -20,16 +20,39 @@ typedef struct usefulInfo {
 
 usefulInfo espData;
 
+int WIFI_try = 0;
+
 void setup() {
   Serial.begin(115200);
 
   // Initialize WiFi in Station mode
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
-  while (WiFi.waitForConnectResult() != WL_CONNECTED) {
-    Serial.println("Connection Failed! Rebooting...");
-    delay(5000);
-    ESP.restart();
+  //ESP_NOW setup
+  while (WIFI_try < 10) {
+    if (WiFi.waitForConnectResult() != WL_CONNECTED) {
+      Serial.print("Connection Failed! Retrying...");
+      Serial.println(WIFI_try);
+      mode_Static(2, 100);
+      wingLF.show();
+      wingRF.show();
+      wingLB.show();
+      wingRB.show();
+      head.show();
+      tail.show();
+      delay(100);
+      WIFI_try++;
+    } else {
+      WIFI_try = 15;
+      mode_Static(4, 100);
+    }
+    wingLF.show();
+    wingRF.show();
+    wingLB.show();
+    wingRB.show();
+    head.show();
+    tail.show();
+    delay(100);
   }
   ArduinoOTA.setHostname(name);
   ArduinoOTA.setPassword("Glow");

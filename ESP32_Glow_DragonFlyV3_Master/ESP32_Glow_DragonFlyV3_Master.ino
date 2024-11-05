@@ -47,13 +47,13 @@ esp_now_peer_info_t peerInfo;
 #include <Adafruit_NeoPixel.h>
 
 #define LED_TYPE NEO_GRBW  //LED configuration used
-
+#define Programming -1
 #define Static 0
 #define Static_P 1
 #define Travel1 2
 #define Travel2 3
 #define Heartbeat 4
-#define Spiral 5
+#define Spiral 5  //remove this
 #define Wing 6
 
 // How many leds in the body parts?
@@ -91,11 +91,11 @@ Adafruit_NeoPixel tail(Num_Leds_Tail, datTail, LED_TYPE);
 
 
 //usable variables
-int Modes = 2;
+int Modes = 3;
 int returnVar = 0;
 int arDATALoop[4];
 int randColor = 0, randColorBuf = 0;
-
+int WIFI_try = 0;
 //Time variables
 unsigned long previousMillis = 0;
 unsigned long interval = 1000 * 10;  //5min delay
@@ -127,12 +127,33 @@ void setup() {
 #ifdef synchronization
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
-  while (WiFi.waitForConnectResult() != WL_CONNECTED) {
-    Serial.println("Connection Failed! Rebooting...");
-    mode_Static(2, 100);
-    delay(5000);
-    ESP.restart();
+  while (WIFI_try < 10) {
+    if (WiFi.waitForConnectResult() != WL_CONNECTED) {
+      Serial.print("Connection Failed! Retrying...");
+      Serial.println(WIFI_try);
+      mode_Static(2, 100);
+      wingLF.show();
+      wingRF.show();
+      wingLB.show();
+      wingRB.show();
+      head.show();
+      tail.show();
+      delay(100);
+      WIFI_try++;
+    } else {
+      WIFI_try = 15;
+      Modes = Programming;
+      mode_Static(3, 100);
+    }
+    wingLF.show();
+    wingRF.show();
+    wingLB.show();
+    wingRB.show();
+    head.show();
+    tail.show();
+    delay(100);
   }
+
   ArduinoOTA.setHostname(name);
   ArduinoOTA.setPassword("Glow");
   delay(1000);
@@ -209,6 +230,16 @@ void loop() {
   //Mode 5, spiral; lights spirals around it's body
   //Mode 6, wing; light slowly travels away from the center
   switch (Modes) {
+    case Programming:
+      mode_Static(4, 100);
+      wingLF.show();
+      wingRF.show();
+      wingLB.show();
+      wingRB.show();
+      head.show();
+      tail.show();
+      for (;;) yield();
+      break;
     case Static:  //static one colour, only used during startup phase
                   //Works fine
 #if DEBUG > 1
@@ -234,7 +265,7 @@ void loop() {
 #if DEBUG > 1
       Serial.print("Entering mode: Travel 2");
 #endif
-      returnVar = mode_Travel_2(2000, arDATALoop);
+      returnVar = mode_Travel_2(60000, arDATALoop);
       break;
     case Heartbeat:  //Butterfly mimics a heartbeat
                      //feels off, make it feel more like a heartbeat, you know. with the LEDs slowly lighting up.
@@ -449,9 +480,6 @@ int mode_Travel_1(int intervalT1, int arDATA[4]) {  //travel from tail tip to he
         }
         position++;
         break;
-        /****************************************************/
-        /*              This needs to be fixed              */
-        /****************************************************/
       case 4:  //head; light up both eyes //change to 3 colour move; base > blend > accent
         travelLength = Num_Leds_Head;
         for (int i = 0; i < PulseWidthT1; i++) {
@@ -481,9 +509,6 @@ int mode_Travel_1(int intervalT1, int arDATA[4]) {  //travel from tail tip to he
 #endif
         break;
     }
-    /****************************************************/
-    /*              This needs to be fixed              */
-    /****************************************************/
     if (position >= travelLength + PulseWidthT1 || state == 0) {
       position = 0;  // - (PulseWidth / 2);
       state++;
@@ -499,6 +524,8 @@ int PulseWidthT2 = 10;
 int positionT2W = 0, positionT2T = 0;
 unsigned long previousMillisT2W = 0, previousMillisT2T = 0, previousMillisT2H = 0;
 int run2 = 0;
+int T2Steps = 25;
+int positionT2Ti = 0, positionT2Wi = 0;
 int mode_Travel_2(int interval, int arDATA[4]) {  //travel from body to ends
   int returnValT2 = 0;
   int arRGB[3];
@@ -515,38 +542,45 @@ int mode_Travel_2(int interval, int arDATA[4]) {  //travel from body to ends
     previousMillisT2H = currentMillisT2;
     head.fill(head.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
   }
-  if (currentMillisT2 - previousMillisT2T >= (interval / (Num_Leds_Tail + PulseWidthT2))) {  //Tail
+  if (currentMillisT2 - previousMillisT2T >= (interval / Num_Leds_Tail) / T2Steps) {  //Tail
     previousMillisT2T = currentMillisT2;
-    for (int i = 0; i < PulseWidthT2; i++) {
-      int posT = positionT2T - PulseWidthT2 + i;
-      tail.setPixelColor(posT, tail.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+    for (int i = 0; i < positionT2T - 1; i++) {
+      tail.setPixelColor(i, tail.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
     }
-    positionT2T++;
+    positionT2T = map(positionT2Ti, 0, T2Steps * Num_Leds_Wings, 0, Num_Leds_Wings);
+    tail.setPixelColor(positionT2T, tail.Color(arRGB[0] / T2Steps * (positionT2Ti % Num_Leds_Wings), arRGB[1] / T2Steps * (positionT2Ti % Num_Leds_Wings), arRGB[2] / T2Steps * (positionT2Ti % Num_Leds_Wings), arRGB[3] / T2Steps * (positionT2Ti % Num_Leds_Wings)));
+
+    positionT2Ti++;
 #if DEBUG > 1
     Serial.print("posT2Tail : ");
-    Serial.println(positionT2T);
+    Serial.println(positionT2Ti);
 #endif
   }
-  if (currentMillisT2 - previousMillisT2W >= (interval / (Num_Leds_Wings + PulseWidthT2))) {  //Wings
+  if (currentMillisT2 - previousMillisT2W >= (interval / Num_Leds_Wings) / T2Steps) {  //Wings
     previousMillisT2W = currentMillisT2;
-    for (int i = 0; i < PulseWidthT2; i++) {
-      int posW = positionT2W - PulseWidthT2 + i;
-      wingLF.setPixelColor(posW, wingLF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
-      wingRF.setPixelColor(posW, wingRF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
-      wingLB.setPixelColor(posW, wingLB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
-      wingRB.setPixelColor(posW, wingRB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+    positionT2W = map(positionT2Wi, 0, T2Steps * Num_Leds_Wings, 0, Num_Leds_Wings);
+    for (int i = 0; i < positionT2W - 1; i++) {
+      wingLF.setPixelColor(i, wingLF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+      wingRF.setPixelColor(i, wingRF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+      wingLB.setPixelColor(i, wingLB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+      wingRB.setPixelColor(i, wingRB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
     }
-    positionT2W++;
+    wingLF.setPixelColor(positionT2W, wingLF.Color(arRGB[0] / T2Steps * (positionT2Wi % Num_Leds_Wings), arRGB[1] / T2Steps * (positionT2Wi % Num_Leds_Wings), arRGB[2] / T2Steps * (positionT2Wi % Num_Leds_Wings), arRGB[3] / T2Steps * (positionT2Wi % Num_Leds_Wings)));
+    wingRF.setPixelColor(positionT2W, wingRF.Color(arRGB[0] / T2Steps * (positionT2Wi % Num_Leds_Wings), arRGB[1] / T2Steps * (positionT2Wi % Num_Leds_Wings), arRGB[2] / T2Steps * (positionT2Wi % Num_Leds_Wings), arRGB[3] / T2Steps * (positionT2Wi % Num_Leds_Wings)));
+    wingLB.setPixelColor(positionT2W, wingLB.Color(arRGB[0] / T2Steps * (positionT2Wi % Num_Leds_Wings), arRGB[1] / T2Steps * (positionT2Wi % Num_Leds_Wings), arRGB[2] / T2Steps * (positionT2Wi % Num_Leds_Wings), arRGB[3] / T2Steps * (positionT2Wi % Num_Leds_Wings)));
+    wingRB.setPixelColor(positionT2W, wingRB.Color(arRGB[0] / T2Steps * (positionT2Wi % Num_Leds_Wings), arRGB[1] / T2Steps * (positionT2Wi % Num_Leds_Wings), arRGB[2] / T2Steps * (positionT2Wi % Num_Leds_Wings), arRGB[3] / T2Steps * (positionT2Wi % Num_Leds_Wings)));
+
+    positionT2Wi++;
 #if DEBUG > 1
     Serial.print("posT2Wing : ");
-    Serial.println(positionT2W);
+    Serial.println(positionT2Wi);
 #endif
   }
   //when both trails have reached the end, run it again with the second colour. after that
   //pass on the mode is done
   if (positionT2W >= Num_Leds_Wings && positionT2T >= Num_Leds_Tail) {
-    positionT2W = 0;
-    positionT2T = 0;
+    positionT2Wi = 0;
+    positionT2Ti = 0;
     if (run2 == 0) {
       run2 = 1;
     } else {
