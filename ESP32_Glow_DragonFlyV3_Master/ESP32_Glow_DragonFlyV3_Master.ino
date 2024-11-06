@@ -17,7 +17,7 @@
 #include <ArduinoOTA.h>
 
 //change this to your hotspot..
-const char* ssid = "";
+const char* ssid = "Glow DF30";
 const char* password = "";
 
 const char* name = "MasterESP";
@@ -53,13 +53,13 @@ esp_now_peer_info_t peerInfo;
 #define Travel1 2
 #define Travel2 3
 #define Heartbeat 4
-#define Spiral 5  //remove this
-#define Wing 6
+#define Wing 5
+#define Blink 6
 
 // How many leds in the body parts?
 #define Num_Leds_Wings 34
 #define Num_Leds_Head 6
-#define Num_Leds_Tail 31
+#define Num_Leds_Tail 33
 
 //for conveniently switching MCUs
 /*
@@ -91,7 +91,7 @@ Adafruit_NeoPixel tail(Num_Leds_Tail, datTail, LED_TYPE);
 
 
 //usable variables
-int Modes = 3;
+int Modes = 0;
 int returnVar = 0;
 int arDATALoop[4];
 int randColor = 0, randColorBuf = 0;
@@ -99,6 +99,12 @@ int WIFI_try = 0;
 //Time variables
 unsigned long previousMillis = 0;
 unsigned long interval = 1000 * 10;  //5min delay
+//StaticP(0) T1() T2() HB() Wing()
+int modeOTA[] = { Static_P, Travel1, Travel2, Heartbeat, 41 /*Blink*/, Wing };
+int speedOTA[] = { 0, 250, 60, 40, 400, 40 };
+int colorintervalOTA[] = { 0, 0 };
+
+
 
 void setup() {
   delay(100);
@@ -156,7 +162,6 @@ void setup() {
 
   ArduinoOTA.setHostname(name);
   ArduinoOTA.setPassword("Glow");
-  delay(1000);
 
   //OTA Handler
   ArduinoOTA
@@ -210,6 +215,7 @@ void setup() {
 
   fetchColourCombo(random(32), arDATALoop);
   //Implement Jaspers crazy ass idea of synchronization
+  delay(5000);
 }
 
 void loop() {
@@ -231,21 +237,24 @@ void loop() {
   //Mode 6, wing; light slowly travels away from the center
   switch (Modes) {
     case Programming:
-      mode_Static(4, 100);
+      mode_Static(4, 100);  //display blue, to signal being in programming mode
       wingLF.show();
       wingRF.show();
       wingLB.show();
       wingRB.show();
       head.show();
       tail.show();
-      for (;;) yield();
+      for (;;) {
+        ArduinoOTA.handle();
+        //Keep your hands of this.. this is necessary
+      }
       break;
     case Static:  //static one colour, only used during startup phase
                   //Works fine
 #if DEBUG > 1
       Serial.println("Entering mode: Static");
 #endif
-      returnVar = mode_Static(1, 100);
+      returnVar = mode_Static(3, 100);
       break;
     case Static_P:  //dual colour static
                     //Works fine, except for there being no delay. So add blink without delay to it
@@ -259,13 +268,13 @@ void loop() {
 #if DEBUG > 1
       Serial.println("Entering mode: Travel 1");
 #endif
-      returnVar = mode_Travel_1(50, arDATALoop);
+      returnVar = mode_Travel_1(espData.speed, arDATALoop);
       break;
     case Travel2:  //Light travels from the center of the dragonfly to the outside
 #if DEBUG > 1
       Serial.print("Entering mode: Travel 2");
 #endif
-      returnVar = mode_Travel_2(60000, arDATALoop);
+      returnVar = mode_Travel_2(espData.speed * 1000, arDATALoop);
       break;
     case Heartbeat:  //Butterfly mimics a heartbeat
                      //feels off, make it feel more like a heartbeat, you know. with the LEDs slowly lighting up.
@@ -273,19 +282,19 @@ void loop() {
 #if DEBUG > 1
       Serial.println("Entering mode: Heartbeat");
 #endif
-      returnVar = mode_Heartbeat(60);
-      break;
-    case Spiral:  //Light spiral across it's body
-#if DEBUG > 1
-      Serial.println("Entering mode: Spiral");
-#endif
-      returnVar = mode_Spiral(0, arDATALoop);
+      returnVar = mode_Heartbeat(espData.speed);
       break;
     case Wing:  //Light slowly travels across it's wings matching it's flapping speed
 #if DEBUG > 1
       Serial.println("Entering mode: Wing");
 #endif
-      returnVar = mode_Wing(100, arDATALoop);
+      returnVar = mode_Wing(espData.speed, arDATALoop);
+      break;
+    case Blink:  //Similar to heartbeat, just a different color
+#if DEBUG > 1
+      Serial.println("Entering mode: Blink");
+#endif
+      //returnVar = mode_Wing(espData.speed, arDATALoop);
       break;
   }
 #if DEBUG > 1
@@ -298,7 +307,9 @@ void loop() {
   head.show();
   tail.show();
 
+  //************** ColorMorpher **************//
   if (returnVar == 1) {
+    //making sure you dont get the same color combo twice in a row
     while (randColor == randColorBuf) {
       randColor = random(32);
     }
@@ -311,42 +322,34 @@ void loop() {
 #endif
     fetchColourCombo(randColor, arDATALoop);
     returnVar = 0;
-  }
+    //************** Fetching the data **************//
+    espData.animationMode = Modes;
+    espData.speed = speedOTA[Modes];
+    espData.colorCombo = randColor;
+    espData.interval = 300;  //5min delay
+    espData.checksum = espData.animationMode + espData.speed + espData.colorCombo + espData.interval;
 
-  unsigned long currentMillis = millis();
-  if (currentMillis - previousMillis >= interval && returnVar == 1) {  //5min interval timer to switch up the lighting effects
-    //save the last time you switched modes
-    previousMillis = currentMillis;
-
-
-
-    /*    Go put this in a seperate loop    */
-    /*    Go put this in a seperate loop    */
-
-    espData.animationMode = 254;
-    espData.speed = 32000;
-    espData.colorCombo = 38;
-    espData.interval = 5000000;
-    espData.checksum = 254 + 32000 + 38 + 5000000;
-
-
+    //************** Yeeting it out the door **************//
     esp_err_t result = esp_now_send(wideBroadcastAddress, (uint8_t*)&espData, sizeof(espData));
     if (result == ESP_OK) {
       Serial.println("Sent with success");
     } else {
       Serial.println("Error sending the data");
     }
-    /*    Go put this in a seperate loop    */
-    /*    Go put this in a seperate loop    */
-  }
+    //************** ColorMorpher **************//
+    unsigned long currentMillis = millis();
+    if (currentMillis - previousMillis >= espData.interval * 1000) {  //5min interval timer to switch up the lighting effects
+      //save the last time you switched modes
+      previousMillis = currentMillis;
 
-  /*if (returnVar == 1) {
-      if (Modes == Wing) {
+      //************** Incrementing mode **************//
+      if (Modes == Blink) {
         Modes = 1;
       } else {
         Modes++;
       }
-    }*/
+    }
+  }
 }
 
 /*  Various displaying modes  */
@@ -357,8 +360,6 @@ void loop() {
 //Input brightness; .. .. ..
 /**************************************************************************/
 int mode_Static(int colour, int brightness) {
-// wingLF[0] = CRGB::Red;
-// wingRF[0] = CRGB(255, 255, 255);
 #if DEBUG > 1
   Serial.println("Entered mode: Static");
 #endif
@@ -386,6 +387,9 @@ int mode_Static_P(int arDATA[4]) {  //clean this up and merge with lightLED
   head.fill(wingLF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
   tail.fill(wingLF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
 
+  /* Maybe remove this afterall */
+  /* Maybe remove this afterall */
+  /* Maybe remove this afterall */
   blendColorsRGBW(arDATA, subColRGB);                                    //fetching the blend of the 2 colors
   for (int i = (Num_Leds_Wings / 3); i < Num_Leds_Wings * 2 / 3; i++) {  //colouring the second part of the wings
     wingLF.setPixelColor(i, wingLF.Color(subColRGB[0], subColRGB[1], subColRGB[2], subColRGB[3]));
@@ -399,6 +403,9 @@ int mode_Static_P(int arDATA[4]) {  //clean this up and merge with lightLED
   for (int i = (Num_Leds_Tail / 3); i < Num_Leds_Tail * 2 / 3; i++) {  //colouring the second part of the tail
     tail.setPixelColor(i, tail.Color(subColRGB[0], subColRGB[1], subColRGB[2], subColRGB[3]));
   }
+  /* Maybe remove this afterall */
+  /* Maybe remove this afterall */
+  /* Maybe remove this afterall */
 
   lightLED(arDATA[1], 2, arDATA[3], arRGB);                          //fetching the background accent color
   for (int i = (Num_Leds_Wings * 2 / 3); i < Num_Leds_Wings; i++) {  //colouring the second part of the wings
@@ -1307,4 +1314,3 @@ void OnDataSent(const uint8_t* mac_addr, esp_now_send_status_t status) {
   }
 #endif
 }
-//void sendDataESPnow (uint8_t[] broadcastAddress, )
