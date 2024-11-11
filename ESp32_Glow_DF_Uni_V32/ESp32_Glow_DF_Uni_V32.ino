@@ -367,7 +367,7 @@ int returnValT1 = 0;
 
 int brightnessT1 = 255;                             // Start at max brightness
 int fadeDir = -1;                                   // Start with fade-out (decrementing)
-int fadeSpeed = 2;                                  // Adjust this for fade speed
+int fadeSpeed = 3;                                  // Adjust this for fade speed
 int mode_Travel_1(int intervalT1, int arDATA[4]) {  //travel from tail tip to head
   returnValT1 = 0;
   int arRGB[3];
