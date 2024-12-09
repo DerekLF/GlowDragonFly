@@ -20,8 +20,14 @@
 const char* ssid = "GLOW DF30";
 const char* password = "BeCreative";
 
-const char* name = "UniESP6_V33";
-
+const char* name = "UniES62OLD_V36 30";
+float maxBrightness = 0.30;  //value between 0 and 1
+//UniESP1 -- 30
+//UniESP2 -- 30
+//UniESP3 -- 30
+//UniESP4 -- 30
+//UniESP5 -- 30
+//UniESP6 -- 30
 #endif
 
 #include <Adafruit_NeoPixel.h>
@@ -71,14 +77,15 @@ Adafruit_NeoPixel tail(Num_Leds_Tail, datTail, LED_TYPE);
 
 
 //usable variables
-int Modes = 2;
+int Modes = 4;
 int arDATALoop[4];
 int randColor = 0, randColorBuf = 0;
 int WIFI_try = 0;
 int returnVar = 0;
+
 //Time variables
 unsigned long previousMillis = 0;
-unsigned long mainInterval = 120000;  //5min delay
+unsigned long mainInterval = 20000;  //5min delay
 //StaticP(0) T1() T2() HB() Wing()
 // int modeOTA[] = { Static_P, Travel1, Travel2, Heartbeat, 41 /*Blink*/, Wing };
 // int speedOTA[] = { 0, 250, 60, 40, 400, 40 };
@@ -232,7 +239,7 @@ void loop() {
 #if DEBUG > 1
       //Serial.println("Entering mode: Static Double");
 #endif
-      returnVar = mode_Static_P(arDATALoop, mainInterval / 10);
+      returnVar = mode_Static_P(arDATALoop, 100);
       break;
     case Travel1:  //Light travels from tail to head across the wings
                    //works perfectly, takes 8.3 seconds per cycle
@@ -253,13 +260,13 @@ void loop() {
 #if DEBUG > 1
       Serial.println("Entering mode: Heartbeat");
 #endif
-      returnVar = mode_Heartbeat(20);
+      returnVar = mode_Heartbeat(20 * maxBrightness);
       break;
     case Wing:  //Light slowly travels across it's wings matching it's flapping speed
 #if DEBUG > 1
       Serial.println("Entering mode: Wing");
 #endif
-      returnVar = mode_Wing(40, arDATALoop);
+      returnVar = mode_Wing(100, arDATALoop);
       break;
 #if DEBUG > 1
       Serial.println("Displaying LEDs");
@@ -297,7 +304,7 @@ void loop() {
       previousMillis = currentMillis;
 
       //************** Incrementing mode **************//
-      if (Modes == Heartbeat) {
+      if (Modes >= Wing) {
         Modes = 1;
       } else {
         Modes++;
@@ -328,15 +335,37 @@ int mode_Static(int colour, int brightness) {
 //Function for showing a random dual + blend colour spectacle on the wings, staticly
 //Input NULL
 /**************************************************************************/
+int stateSP = 0;
 unsigned long previousMillisSP = 0;
+int brightnessAD2 = 0;
+int brightnessAD3 = 0;
+int fadeSpeedSP = 5;
+int fadeDirSP = -1;
 int mode_Static_P(int arDATA[4], int intervalSP) {  //clean this up and merge with lightLED
-  int arRGB[3];
+  int arRGB[4];
   int returnValSP = 0;
+  // Reverse direction at bounds (0 or 100%) to switch between fade out/in
+
+
   unsigned long currentMillisSP = millis();
   if (currentMillisSP - previousMillisSP >= intervalSP) {
     previousMillisSP = currentMillisSP;
-    lightLED(arDATA[0], 1, arDATA[2], arRGB);                      //filling the color in
-    lightLED(arDATA[1], 2, arDATA[3], arRGB);                      //fetching the background accent color
+    //fade in and out
+    brightnessAD2 += fadeDirSP * fadeSpeedSP;
+    brightnessAD3 += fadeDirSP * fadeSpeedSP;
+    if (brightnessAD3 < 0 && brightnessAD2 < 0) {
+      brightnessAD2 = 0;
+      brightnessAD3 = 0;
+      fadeDirSP = 1;  // Start fading in
+      returnValSP = 1;
+    } else if (brightnessAD2 > arDATA[2] && brightnessAD3 > arDATA[3]) {
+      brightnessAD2 = arDATA[2];
+      brightnessAD3 = arDATA[2];
+      fadeDirSP = -1;  // Start fading out
+    }
+    //fade in and out stops
+    lightLED(arDATA[0], 1, brightnessAD2, arRGB);                  //filling the color in
+    lightLED(arDATA[1], 2, brightnessAD3, arRGB);                  //fetching the background accent color
     for (int i = (Num_Leds_Wings / 2); i < Num_Leds_Wings; i++) {  //colouring the second part of the wings
       wingLF.setPixelColor(i, wingLF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
       wingRF.setPixelColor(i, wingRF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
@@ -349,8 +378,6 @@ int mode_Static_P(int arDATA[4], int intervalSP) {  //clean this up and merge wi
     for (int i = (Num_Leds_Tail / 2); i < Num_Leds_Tail; i++) {  //colouring the second part of the tail
       tail.setPixelColor(i, tail.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
     }
-
-    returnValSP = 1;
   }
   return returnValSP;
 }
@@ -360,17 +387,17 @@ int mode_Static_P(int arDATA[4], int intervalSP) {  //clean this up and merge wi
 /**************************************************************************/
 int travelLength = 0, position = 0;
 unsigned long previousMillisT1 = 0;
-int state = 0;
+int stateT1 = 0;
 
 int PulseWidthT1 = 6;
 int returnValT1 = 0;
 
-int brightnessT1 = 255;                             // Start at max brightness
+int brightnessT1 = 255 * maxBrightness;             // Start at max brightness
 int fadeDir = -1;                                   // Start with fade-out (decrementing)
 int fadeSpeed = 3;                                  // Adjust this for fade speed
 int mode_Travel_1(int intervalT1, int arDATA[4]) {  //travel from tail tip to head
   returnValT1 = 0;
-  int arRGB[3];
+  int arRGB[4];
   //int subColRGB[3];
   unsigned long currentMillisT1 = millis();
   if (currentMillisT1 - previousMillisT1 >= intervalT1) {
@@ -378,7 +405,7 @@ int mode_Travel_1(int intervalT1, int arDATA[4]) {  //travel from tail tip to he
     lightLED(arDATA[1], 2, arDATA[3], arRGB);
     lightLED(arDATA[0], 1, arDATA[2], NULL);
     //blendColorsRGBW(arDATA, subColRGB);  //fetching the perfect blend
-    switch (state) {
+    switch (stateT1) {
       case 0:
         lightLED(arDATA[0], 1, arDATA[2], NULL);
 
@@ -440,11 +467,11 @@ int mode_Travel_1(int intervalT1, int arDATA[4]) {  //travel from tail tip to he
 #endif
         break;
     }
-    if (position >= travelLength + PulseWidthT1 || state == 0) {
+    if (position >= travelLength + PulseWidthT1 || stateT1 == 0) {
       position = 0;  // - (PulseWidth / 2);
-      state++;
-      if (state >= 6) {
-        state = 1;
+      stateT1++;
+      if (stateT1 >= 6) {
+        stateT1 = 1;
       }
     }
   }
@@ -457,7 +484,7 @@ unsigned long previousMillisT2W = 0, previousMillisT2T = 0, previousMillisT2H = 
 int run2 = 0;
 int mode_Travel_2(int interval, int arDATA[4]) {  //travel from body to ends
   int returnValT2 = 0;
-  int arRGB[3];
+  int arRGB[4];
 
   if (run2 == 0) {
     lightLED(arDATA[1], 2, arDATA[3], arRGB);  //fetching the initial colour
@@ -469,7 +496,7 @@ int mode_Travel_2(int interval, int arDATA[4]) {  //travel from body to ends
 
   if (currentMillisT2 - previousMillisT2H >= (interval / Num_Leds_Head)) {  //Head
     previousMillisT2H = currentMillisT2;
-    head.setPixelColor(positionT2H, tail.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+    head.setPixelColor(positionT2H, head.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
     positionT2H++;
 #if DEBUG > 1
     Serial.print("posT2Head : ");
@@ -552,7 +579,7 @@ int mode_Heartbeat(int BPM) {
     // Update brightness with direction control
     if (!hbDir) {
       hbBrightness += 5;
-      if (hbBrightness >= 250) hbDir = true;  // Change direction when max brightness reached
+      if (hbBrightness >= 255 * maxBrightness) hbDir = true;  // Change direction when max brightness reached
     } else {
       hbBrightness -= 5;
       if (hbBrightness <= 0) hbDir = false;  // Change direction when min brightness reached
@@ -582,10 +609,8 @@ int lengthMC = Num_Leds_Wings / 2;
 int returnValW = 0;
 unsigned long previousMillisWM = 0;
 int mode_Wing(int speed, int arDATA[4]) {
-  int arRGB[3];
+  int arRGB[4];
   returnValW = 0;
-
-
 
   //applying the traveling colour
   unsigned long currentMillisWM = millis();
@@ -597,6 +622,8 @@ int mode_Wing(int speed, int arDATA[4]) {
     wingRF.fill(wingRF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
     wingLB.fill(wingLB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
     wingRB.fill(wingRB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+    tail.fill(tail.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+    head.fill(head.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
 
 
     lightLED(arDATA[0], 2, arDATA[2], arRGB);  //applying the background colour
@@ -611,8 +638,11 @@ int mode_Wing(int speed, int arDATA[4]) {
       wingRF.setPixelColor(ledPos, wingRF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
       wingLB.setPixelColor(ledPos, wingLB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
       wingRB.setPixelColor(ledPos, wingRB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+      tail.setPixelColor(ledPos, tail.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+      head.setPixelColor(map(ledPos, 0, Num_Leds_Wings, 0, Num_Leds_Head), head.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
     }
   }
+  return returnValW;
 }
 
 /**************************************************************************/
@@ -885,10 +915,10 @@ void fetchColourCombo(int colourPair, int* returnArr) {
 
     case 26:  // Light Yellow and Coral
 #if DEBUG > 0
-      Serial.println("Inner Light Yellow - Outer Coral");
+      Serial.println("Inner Light Yellow - Outer Light Blue");
 #endif
       innerColour = 26;      // Light Yellow
-      outerColour = 15;      // Coral
+      outerColour = 22;      // Light Blue
       innerBrightness = 80;  // Inner brightness for Light Yellow
       outerBrightness = 60;  // Outer brightness for Coral
       break;
@@ -961,8 +991,9 @@ void fetchColourCombo(int colourPair, int* returnArr) {
 //Input int brightness; speaks for itself, doesn't it?
 //Input int* returnArRGB; Pointer to array passed along the RGB values adjusted with the brightness.
 /**************************************************************************/
-void lightLED(int colorCode, int mode, int brightness, int* returnArRGB) {
+void lightLED(int colorCode, int mode, int brightnessInput, int* returnArRGB) {
   float G = 0, R = 0, B = 0, W = 0;
+  float brightness = brightnessInput * maxBrightness;
 #if DEBUG > 1
   Serial.println("Getting the RGBW values your fat ass desires");
 #endif
