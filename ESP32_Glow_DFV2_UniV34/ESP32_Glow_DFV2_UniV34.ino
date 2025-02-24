@@ -1,3 +1,10 @@
+/*
+// Trimmed down version, utalising just 4 datapins for the 2 left wings, the tail and head.
+
+
+*/
+
+
 #define DEBUG 1
 /*            DEBUG instructions            */
 // DEBUG 0 -- Mainly for finished product use, so no debugging info is printed.
@@ -17,13 +24,13 @@
 #include <ArduinoOTA.h>
 
 //change this to your hotspot..
-const char *ssid = "Pretty Fly for a Wi-Fi";
-const char *password = "Zeester207L";
-//const char* ssid = "GLOW DF30";
-//const char* password = "BeCreative";
+//const char* ssid = "Pretty Fly for a Wi-Fi";
+//const char* password = "Zeester207L";
+const char* ssid = "GLOW DF30";
+const char* password = "BeCreative";
 
-const char* name = "UniESP2001_V34 50";
-float maxBrightness = 0.50;  //value between 0 and 1
+const char* name = "UniESP2004_V35 30";
+float maxBrightness = 30;  //value between 0 and 1
 //UniESP1 -- 30
 //UniESP2 -- 30
 //UniESP3 -- 30
@@ -61,19 +68,17 @@ float maxBrightness = 0.50;  //value between 0 and 1
 */
 
 //for using with the ESP32
-#define datWingLF 6  //32
-#define datWingRF 10  //33
-#define datWingLB 8  //25
-#define datWingRB 9   //26
-#define datHead 5    //27
-#define datTail 7    //14
+#define datWingLF 6   //32
+//#define datWingRF 10  //33
+#define datWingLB 8   //25
+//#define datWingRB 9   //26
+#define datHead 5     //27
+#define datTail 7     //14
 
 
 //The 4 wings, might have varying amount of LEDs
 Adafruit_NeoPixel wingLF(Num_Leds_Wings, datWingLF, LED_TYPE);
-Adafruit_NeoPixel wingRF(Num_Leds_Wings, datWingRF, LED_TYPE);
 Adafruit_NeoPixel wingLB(Num_Leds_Wings, datWingLB, LED_TYPE);
-Adafruit_NeoPixel wingRB(Num_Leds_Wings, datWingRB, LED_TYPE);
 Adafruit_NeoPixel head(Num_Leds_Head, datHead, LED_TYPE);
 Adafruit_NeoPixel tail(Num_Leds_Tail, datTail, LED_TYPE);
 
@@ -96,25 +101,21 @@ unsigned long mainInterval = 20000;  //5min delay
 
 
 void setup() {
-
   //initialize all the LEDstrips
   wingLF.begin();
-  wingRF.begin();
   wingLB.begin();
-  wingRB.begin();
   head.begin();
   tail.begin();
 
   //start with a blank slate
   wingLF.clear();
-  wingRF.clear();
   wingLB.clear();
-  wingRB.clear();
   head.clear();
   tail.clear();
+
   delay(1000);
   Serial.begin(115200);
-  Serial.println("V3.2 - ESP32; GLOW Dragonfly");
+  Serial.println("V3.4 - ESP32; GLOW Dragonfly");
   Serial.println(name);
 
 
@@ -185,9 +186,9 @@ void setup() {
 
     // Show updates for each LED section
     wingLF.show();
-    wingRF.show();
+
     wingLB.show();
-    wingRB.show();
+
     head.show();
     tail.show();
     delay(100);
@@ -222,9 +223,9 @@ void loop() {
           delay(100);
         }
         wingLF.show();
-        wingRF.show();
+
         wingLB.show();
-        wingRB.show();
+
         head.show();
         tail.show();
       }
@@ -262,7 +263,7 @@ void loop() {
 #if DEBUG > 1
       Serial.println("Entering mode: Heartbeat");
 #endif
-      returnVar = mode_Heartbeat(20 * maxBrightness);
+      returnVar = mode_Heartbeat(20 * (maxBrightness/100));
       break;
     case Wing:  //Light slowly travels across it's wings matching it's flapping speed
 #if DEBUG > 1
@@ -276,9 +277,9 @@ void loop() {
   }
 
   wingLF.show();
-  wingRF.show();
+
   wingLB.show();
-  wingRB.show();
+
   head.show();
   tail.show();
 
@@ -370,9 +371,8 @@ int mode_Static_P(int arDATA[4], int intervalSP) {  //clean this up and merge wi
     lightLED(arDATA[1], 2, brightnessAD3, arRGB);                  //fetching the background accent color
     for (int i = (Num_Leds_Wings / 2); i < Num_Leds_Wings; i++) {  //colouring the second part of the wings
       wingLF.setPixelColor(i, wingLF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
-      wingRF.setPixelColor(i, wingRF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
       wingLB.setPixelColor(i, wingLB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
-      wingRB.setPixelColor(i, wingRB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+
     }
     for (int i = (Num_Leds_Head / 2); i < Num_Leds_Head; i++) {  //colouring the second part of the head
       head.setPixelColor(i, head.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
@@ -394,7 +394,7 @@ int stateT1 = 0;
 int PulseWidthT1 = 6;
 int returnValT1 = 0;
 
-int brightnessT1 = 255 * maxBrightness;             // Start at max brightness
+int brightnessT1 = 255 * (maxBrightness/100);             // Start at max brightness
 int fadeDir = -1;                                   // Start with fade-out (decrementing)
 int fadeSpeed = 3;                                  // Adjust this for fade speed
 int mode_Travel_1(int intervalT1, int arDATA[4]) {  //travel from tail tip to head
@@ -426,7 +426,6 @@ int mode_Travel_1(int intervalT1, int arDATA[4]) {  //travel from tail tip to he
         for (int i = 0; i < PulseWidthT1; i++) {
           int pos = position - (PulseWidthT1 / 2) + i;
           wingLB.setPixelColor(pos, wingLB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
-          wingRB.setPixelColor(pos, wingRB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
         }
         position++;
         break;
@@ -436,7 +435,6 @@ int mode_Travel_1(int intervalT1, int arDATA[4]) {  //travel from tail tip to he
         for (int i = 0; i < PulseWidthT1; i++) {
           int pos = position - (PulseWidthT1 / 2) + i;
           wingLF.setPixelColor(pos, wingLF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
-          wingRF.setPixelColor(pos, wingRF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
         }
         position++;
         break;
@@ -517,9 +515,7 @@ int mode_Travel_2(int interval, int arDATA[4]) {  //travel from body to ends
   if (currentMillisT2 - previousMillisT2W >= (interval / Num_Leds_Wings)) {  //Wings
     previousMillisT2W = currentMillisT2;
     wingLF.setPixelColor(positionT2W, wingLF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
-    wingRF.setPixelColor(positionT2W, wingRF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
     wingLB.setPixelColor(positionT2W, wingLB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
-    wingRB.setPixelColor(positionT2W, wingRB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
 
     positionT2W++;
 #if DEBUG > 1
@@ -571,9 +567,7 @@ int mode_Heartbeat(int BPM) {
     previousMillisHB = currentMillisHB;  // Save the last time we changed brightness
     // Set brightness for all parts
     wingLF.fill(wingLF.Color(hbBrightness, 0, 0, 0));
-    wingRF.fill(wingRF.Color(hbBrightness, 0, 0, 0));
     wingLB.fill(wingLB.Color(hbBrightness, 0, 0, 0));
-    wingRB.fill(wingRB.Color(hbBrightness, 0, 0, 0));
 
     head.fill(head.Color(hbBrightness, 0, 0, 0));
     tail.fill(tail.Color(hbBrightness, 0, 0, 0));
@@ -581,7 +575,7 @@ int mode_Heartbeat(int BPM) {
     // Update brightness with direction control
     if (!hbDir) {
       hbBrightness += 5;
-      if (hbBrightness >= 255 * maxBrightness) hbDir = true;  // Change direction when max brightness reached
+      if (hbBrightness >= 255 * (maxBrightness/100)) hbDir = true;  // Change direction when max brightness reached
     } else {
       hbBrightness -= 5;
       if (hbBrightness <= 0) hbDir = false;  // Change direction when min brightness reached
@@ -621,12 +615,9 @@ int mode_Wing(int speed, int arDATA[4]) {
     lightLED(arDATA[1], 2, arDATA[3], arRGB);  //applying the background colour
 
     wingLF.fill(wingLF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
-    wingRF.fill(wingRF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
     wingLB.fill(wingLB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
-    wingRB.fill(wingRB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
     tail.fill(tail.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
     head.fill(head.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
-
 
     lightLED(arDATA[0], 2, arDATA[2], arRGB);  //applying the background colour
     beginMC++;
@@ -637,9 +628,7 @@ int mode_Wing(int speed, int arDATA[4]) {
     for (int i = 0; i < lengthMC; i++) {
       int ledPos = (beginMC + i) % Num_Leds_Wings;  // Calculate the current LED position
       wingLF.setPixelColor(ledPos, wingLF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
-      wingRF.setPixelColor(ledPos, wingRF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
-      wingLB.setPixelColor(ledPos, wingLB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
-      wingRB.setPixelColor(ledPos, wingRB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+     wingLB.setPixelColor(ledPos, wingLB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
       tail.setPixelColor(ledPos, tail.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
       head.setPixelColor(map(ledPos, 0, Num_Leds_Wings, 0, Num_Leds_Head), head.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
     }
@@ -995,7 +984,7 @@ void fetchColourCombo(int colourPair, int* returnArr) {
 /**************************************************************************/
 void lightLED(int colorCode, int mode, int brightnessInput, int* returnArRGB) {
   float G = 0, R = 0, B = 0, W = 0;
-  float brightness = brightnessInput * maxBrightness;
+  float brightness = brightnessInput * (maxBrightness/100);
 #if DEBUG > 1
   Serial.println("Getting the RGBW values your fat ass desires");
 #endif
@@ -1199,9 +1188,7 @@ void lightLED(int colorCode, int mode, int brightnessInput, int* returnArRGB) {
     Serial.println("Filling her up to the brink");
 #endif
     wingLF.fill(wingLF.Color(R, G, B, W));
-    wingRF.fill(wingRF.Color(R, G, B, W));
     wingLB.fill(wingLB.Color(R, G, B, W));
-    wingRB.fill(wingRB.Color(R, G, B, W));
     head.fill(head.Color(R, G, B, W));
     tail.fill(tail.Color(R, G, B, W));
   } else if (mode == 2) {
