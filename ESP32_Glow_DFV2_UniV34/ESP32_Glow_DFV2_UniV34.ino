@@ -17,11 +17,13 @@
 #include <ArduinoOTA.h>
 
 //change this to your hotspot..
-const char* ssid = "GLOW DF30";
-const char* password = "BeCreative";
+const char *ssid = "Pretty Fly for a Wi-Fi";
+const char *password = "Zeester207L";
+//const char* ssid = "GLOW DF30";
+//const char* password = "BeCreative";
 
-const char* name = "UniES62OLD_V36 30";
-float maxBrightness = 0.30;  //value between 0 and 1
+const char* name = "UniESP2001_V34 50";
+float maxBrightness = 0.50;  //value between 0 and 1
 //UniESP1 -- 30
 //UniESP2 -- 30
 //UniESP3 -- 30
@@ -59,12 +61,12 @@ float maxBrightness = 0.30;  //value between 0 and 1
 */
 
 //for using with the ESP32
-#define datWingLF 32  //32
-#define datWingRF 21  //33
-#define datWingLB 25  //25
-#define datWingRB 5   //26
-#define datHead 22    //27
-#define datTail 12    //14
+#define datWingLF 6  //32
+#define datWingRF 10  //33
+#define datWingLB 8  //25
+#define datWingRB 9   //26
+#define datHead 5    //27
+#define datTail 7    //14
 
 
 //The 4 wings, might have varying amount of LEDs
