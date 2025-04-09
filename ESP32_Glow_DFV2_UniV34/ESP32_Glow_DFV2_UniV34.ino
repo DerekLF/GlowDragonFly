@@ -1,11 +1,12 @@
 /*
 // Trimmed down version, utalising just 4 datapins for the 2 left wings, the tail and head.
+V3.5 increasing overall speed of the MCU and the modes
 
 
 */
 
 
-#define DEBUG 1
+#define DEBUG 0
 /*            DEBUG instructions            */
 // DEBUG 0 -- Mainly for finished product use, so no debugging info is printed.
 // DEBUG 1 -- Basic info printed to show the main steps of the program.
@@ -29,8 +30,8 @@
 const char* ssid = "GLOW DF30";
 const char* password = "BeCreative";
 
-const char* name = "UniESP2004_V35 30";
-float maxBrightness = 30;  //value between 0 and 1
+const char* name = "UniESP2004_V35 40";
+float maxBrightness = 40;  //value between 0 and 100
 //UniESP1 -- 30
 //UniESP2 -- 30
 //UniESP3 -- 30
@@ -68,13 +69,15 @@ float maxBrightness = 30;  //value between 0 and 1
 */
 
 //for using with the ESP32
-#define datWingLF 6   //32
+#define datWingLF 9  //this is pin 8 on v0010
 //#define datWingRF 10  //33
-#define datWingLB 8   //25
+#define datWingLB 6  //25
 //#define datWingRB 9   //26
-#define datHead 5     //27
-#define datTail 7     //14
+#define datHead 7  //27
+#define datTail 5  //14
+#define Men 20
 
+//swap front and back!!
 
 //The 4 wings, might have varying amount of LEDs
 Adafruit_NeoPixel wingLF(Num_Leds_Wings, datWingLF, LED_TYPE);
@@ -92,7 +95,7 @@ int returnVar = 0;
 
 //Time variables
 unsigned long previousMillis = 0;
-unsigned long mainInterval = 20000;  //5min delay
+unsigned long mainInterval = 60000;  //5min delay
 //StaticP(0) T1() T2() HB() Wing()
 // int modeOTA[] = { Static_P, Travel1, Travel2, Heartbeat, 41 /*Blink*/, Wing };
 // int speedOTA[] = { 0, 250, 60, 40, 400, 40 };
@@ -115,8 +118,10 @@ void setup() {
 
   delay(1000);
   Serial.begin(115200);
-  Serial.println("V3.4 - ESP32; GLOW Dragonfly");
+  Serial.println("V3.5 - ESP32; GLOW Dragonfly");
   Serial.println(name);
+  pinMode(Men, OUTPUT);
+  digitalWrite(Men, HIGH);
 
 
 //ESP_NOW setup
@@ -133,7 +138,7 @@ void setup() {
       Serial.print("Connection Failed! Retrying...");
       Serial.println(WIFI_try);
       mode_Static(2, 100);
-      delay(100);
+      delay(500);
       WIFI_try++;
     } else {
       WIFI_try = 15;  // Exit the loop
@@ -199,6 +204,7 @@ void setup() {
 }
 
 void loop() {
+  digitalWrite(Men, HIGH);
 #if DEBUG > 1
   //Serial.println("Do the loopy the loop and pull, now your shoes are looking cool");
 #endif
@@ -214,6 +220,7 @@ void loop() {
   switch (Modes) {
     case Programming:
       for (;;) {
+        digitalWrite(Men, LOW);
         if (WiFi.status() == WL_CONNECTED) {
           mode_Static(4, 100);  //display blue, to signal being in programming mode
           ArduinoOTA.handle();  // Only handle OTA if connected to Wi-Fi
@@ -223,9 +230,7 @@ void loop() {
           delay(100);
         }
         wingLF.show();
-
         wingLB.show();
-
         head.show();
         tail.show();
       }
@@ -249,13 +254,13 @@ void loop() {
 #if DEBUG > 1
       Serial.println("Entering mode: Travel 1");
 #endif
-      returnVar = mode_Travel_1(250, arDATALoop);
+      returnVar = mode_Travel_1(50, arDATALoop);
       break;
     case Travel2:  //Light travels from the center of the dragonfly to the outside
 #if DEBUG > 1
       Serial.print("Entering mode: Travel 2");
 #endif
-      returnVar = mode_Travel_2(5000, arDATALoop);
+      returnVar = mode_Travel_2(1500, arDATALoop);
       break;
     case Heartbeat:  //Butterfly mimics a heartbeat
                      //feels off, make it feel more like a heartbeat, you know. with the LEDs slowly lighting up.
@@ -263,13 +268,13 @@ void loop() {
 #if DEBUG > 1
       Serial.println("Entering mode: Heartbeat");
 #endif
-      returnVar = mode_Heartbeat(20 * (maxBrightness/100));
+      returnVar = mode_Heartbeat(120 * (maxBrightness / 100));
       break;
     case Wing:  //Light slowly travels across it's wings matching it's flapping speed
 #if DEBUG > 1
       Serial.println("Entering mode: Wing");
 #endif
-      returnVar = mode_Wing(100, arDATALoop);
+      returnVar = mode_Wing(25, arDATALoop);
       break;
 #if DEBUG > 1
       Serial.println("Displaying LEDs");
@@ -342,7 +347,7 @@ int stateSP = 0;
 unsigned long previousMillisSP = 0;
 int brightnessAD2 = 0;
 int brightnessAD3 = 0;
-int fadeSpeedSP = 5;
+int fadeSpeedSP = 2;
 int fadeDirSP = -1;
 int mode_Static_P(int arDATA[4], int intervalSP) {  //clean this up and merge with lightLED
   int arRGB[4];
@@ -372,7 +377,6 @@ int mode_Static_P(int arDATA[4], int intervalSP) {  //clean this up and merge wi
     for (int i = (Num_Leds_Wings / 2); i < Num_Leds_Wings; i++) {  //colouring the second part of the wings
       wingLF.setPixelColor(i, wingLF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
       wingLB.setPixelColor(i, wingLB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
-
     }
     for (int i = (Num_Leds_Head / 2); i < Num_Leds_Head; i++) {  //colouring the second part of the head
       head.setPixelColor(i, head.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
@@ -394,9 +398,9 @@ int stateT1 = 0;
 int PulseWidthT1 = 6;
 int returnValT1 = 0;
 
-int brightnessT1 = 255 * (maxBrightness/100);             // Start at max brightness
+int brightnessT1 = 255 * (maxBrightness / 100);     // Start at max brightness
 int fadeDir = -1;                                   // Start with fade-out (decrementing)
-int fadeSpeed = 3;                                  // Adjust this for fade speed
+int fadeSpeed = 2;                                  // Adjust this for fade speed
 int mode_Travel_1(int intervalT1, int arDATA[4]) {  //travel from tail tip to head
   returnValT1 = 0;
   int arRGB[4];
@@ -541,7 +545,7 @@ int mode_Travel_2(int interval, int arDATA[4]) {  //travel from body to ends
 
 unsigned long previousMillisHB = 0;
 unsigned int minToMil = 60000;
-int hbJumps = 50;  // Adjust as needed for smoothness
+int hbJumps = 5;  // Adjust as needed for smoothness
 int hbBrightness = 0;
 bool hbDir = false;
 
@@ -574,10 +578,10 @@ int mode_Heartbeat(int BPM) {
 
     // Update brightness with direction control
     if (!hbDir) {
-      hbBrightness += 5;
-      if (hbBrightness >= 255 * (maxBrightness/100)) hbDir = true;  // Change direction when max brightness reached
+      hbBrightness += 2;
+      if (hbBrightness >= 255 * (maxBrightness / 100)) hbDir = true;  // Change direction when max brightness reached
     } else {
-      hbBrightness -= 5;
+      hbBrightness -= 2;
       if (hbBrightness <= 0) hbDir = false;  // Change direction when min brightness reached
     }
   }
@@ -628,7 +632,7 @@ int mode_Wing(int speed, int arDATA[4]) {
     for (int i = 0; i < lengthMC; i++) {
       int ledPos = (beginMC + i) % Num_Leds_Wings;  // Calculate the current LED position
       wingLF.setPixelColor(ledPos, wingLF.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
-     wingLB.setPixelColor(ledPos, wingLB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
+      wingLB.setPixelColor(ledPos, wingLB.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
       tail.setPixelColor(ledPos, tail.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
       head.setPixelColor(map(ledPos, 0, Num_Leds_Wings, 0, Num_Leds_Head), head.Color(arRGB[0], arRGB[1], arRGB[2], arRGB[3]));
     }
@@ -984,7 +988,7 @@ void fetchColourCombo(int colourPair, int* returnArr) {
 /**************************************************************************/
 void lightLED(int colorCode, int mode, int brightnessInput, int* returnArRGB) {
   float G = 0, R = 0, B = 0, W = 0;
-  float brightness = brightnessInput * (maxBrightness/100);
+  float brightness = brightnessInput * (maxBrightness / 100);
 #if DEBUG > 1
   Serial.println("Getting the RGBW values your fat ass desires");
 #endif
